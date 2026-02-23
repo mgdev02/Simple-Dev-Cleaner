@@ -3,6 +3,9 @@
 Simple Dev Cleaner — Menú manual, colores, loadings, idioma persistente (es/en).
 """
 
+import os
+import shlex
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -42,7 +45,9 @@ TEXTS = {
         "menu_5": "Configuración (carpetas, umbral, idioma)",
         "menu_0": "Salir",
         "prompt_option": "Elegí una opción",
+        "hint_exit": "[dim](0 o q = salir)[/]",
         "bye": "Chau.",
+        "press_enter": "[dim]Enter para continuar[/]",
         "dry_run_title": "Dry run",
         "dry_run_desc": "Solo voy a buscar. No se borra nada.",
         "scanning": "Buscando carpetas...",
@@ -99,16 +104,24 @@ TEXTS = {
         "config_4": "Cambiar umbral de horas sin uso (actual: {} h)",
         "config_5": "Cambiar idioma / Language (actual: {})",
         "config_0": "Volver al menú principal",
+        "config_6": "Abrir config.toml en el editor (nano, vim, etc.)",
         "config_prompt": "Opción",
+        "hint_back": "[dim](0 o q = volver)[/]",
         "folders_list": "Carpetas que se escanean",
         "exists": "existe",
         "not_exists": "no existe (no se escaneará)",
-        "path_prompt": "Ruta de la carpeta (ej. ~/Desktop o /Users/tu/usuario/Proyectos)",
+        "path_prompt": "Ruta(s). Una o varias separadas por coma o una por línea. [dim]q = cancelar[/]",
         "path_empty": "No escribiste ninguna ruta. Probá de nuevo.",
         "path_not_found": "No encontré esa carpeta. Revisá que la ruta exista y que tengas permisos de lectura.",
         "path_added": "Agregada a la lista.",
+        "paths_added": "Agregadas {} carpetas a la lista.",
+        "paths_skipped": " {} omitidas (ya existían o no son válidas).",
         "path_already": "Esa carpeta ya está en la lista.",
+        "edit_config": "Abriendo config en el editor…",
+        "edit_done": "Config guardada. Cambios aplicados.",
+        "edit_fail": "No se pudo abrir el editor (probá EDITOR=nano o editar a mano ~/.config/simple-dev-cleaner/config.toml).",
         "which_remove": "¿Cuál querés quitar? Escribí el número de la lista",
+        "hint_q_cancel": "[dim](q = cancelar)[/]",
         "number_invalid": "Ese número no es válido. Elegí un número entre 1 y {}.",
         "removed_from_list": "Quitada de la lista.",
         "no_folders_configured": "Aún no hay carpetas configuradas. Agregá al menos una (opción 2).",
@@ -132,7 +145,9 @@ TEXTS = {
         "menu_5": "Settings (folders, threshold, language)",
         "menu_0": "Exit",
         "prompt_option": "Choose an option",
+        "hint_exit": "[dim](0 or q = exit)[/]",
         "bye": "Bye.",
+        "press_enter": "[dim]Press Enter to continue[/]",
         "dry_run_title": "Dry run",
         "dry_run_desc": "I'll only search. Nothing will be deleted.",
         "scanning": "Scanning folders...",
@@ -189,16 +204,24 @@ TEXTS = {
         "config_4": "Change unused-hours threshold (current: {} h)",
         "config_5": "Change language / Idioma (current: {})",
         "config_0": "Back to main menu",
+        "config_6": "Open config.toml in editor (nano, vim, etc.)",
         "config_prompt": "Option",
+        "hint_back": "[dim](0 or q = back)[/]",
         "folders_list": "Folders being scanned",
         "exists": "exists",
         "not_exists": "does not exist (will be skipped)",
-        "path_prompt": "Folder path (e.g. ~/Desktop or /Users/you/Projects)",
+        "path_prompt": "Path(s). One or more, comma-separated or one per line. [dim]q = cancel[/]",
         "path_empty": "You didn't enter a path. Try again.",
         "path_not_found": "That folder wasn't found. Check that the path exists and you have read permission.",
         "path_added": "Added to the list.",
+        "paths_added": "{} folders added to the list.",
+        "paths_skipped": " {} skipped (already in list or invalid).",
         "path_already": "That folder is already in the list.",
+        "edit_config": "Opening config in editor…",
+        "edit_done": "Config saved. Changes applied.",
+        "edit_fail": "Could not open editor (try EDITOR=nano or edit ~/.config/simple-dev-cleaner/config.toml manually).",
         "which_remove": "Which one to remove? Enter the number from the list",
+        "hint_q_cancel": "[dim](q = cancel)[/]",
         "number_invalid": "That number isn't valid. Choose a number between 1 and {}.",
         "removed_from_list": "Removed from the list.",
         "no_folders_configured": "No folders configured yet. Add at least one (option 2).",
@@ -226,6 +249,23 @@ def t(config: Config, key: str, *args: Any) -> str:
     return s
 
 
+def wait_enter(config: Config) -> None:
+    """Pausa hasta que el usuario pulse Enter (para leer resultados)."""
+    console.print()
+    try:
+        Prompt.ask(t(config, "press_enter"), default="", show_default=False)
+    except Exception:
+        pass
+
+
+def _normalize_choice(raw: str, choices: list[str]) -> str:
+    """Acepta 0/q como salir/volver. Devuelve opción válida o '0'."""
+    s = (raw or "").strip().lower()
+    if s in ("q", "quit", "exit", "esc"):
+        return "0"
+    return s if s in choices else "0"
+
+
 def print_banner(config: Config) -> None:
     console.print()
     fecha = datetime.now().strftime("%H:%M %d/%m/%Y")
@@ -248,6 +288,7 @@ def print_banner(config: Config) -> None:
 
 
 def menu_principal(config: Config) -> str:
+    choices = ["0", "1", "2", "3", "4", "5"]
     console.print(f"[bold]{t(config, 'menu_title')}[/]")
     console.print(f"  [cyan]1[/]  {t(config, 'menu_1')}")
     console.print(f"  [cyan]2[/]  {t(config, 'menu_2')}")
@@ -255,13 +296,11 @@ def menu_principal(config: Config) -> str:
     console.print(f"  [cyan]4[/]  {t(config, 'menu_4')}")
     console.print(f"  [cyan]5[/]  {t(config, 'menu_5')}")
     console.print(f"  [cyan]0[/]  {t(config, 'menu_0')}")
+    console.print(f"  {t(config, 'hint_exit')}")
     console.print()
     try:
-        return Prompt.ask(
-            f"[bold]{t(config, 'prompt_option')}[/]",
-            choices=["0", "1", "2", "3", "4", "5"],
-            default="0",
-        )
+        raw = (Prompt.ask(f"[bold]{t(config, 'prompt_option')}[/]", default="0") or "0").strip()
+        return _normalize_choice(raw, choices)
     except Exception:
         return "0"
 
@@ -290,6 +329,7 @@ def run_dry_run(config: Config) -> None:
     console.print()
     if total == 0:
         console.print(f"[dim]{t(config, 'none_match', config.unused_hours)}[/]")
+        wait_enter(config)
         return
 
     table = Table(
@@ -309,7 +349,7 @@ def run_dry_run(config: Config) -> None:
     console.print(table)
     total_mb = sum(r["size_mb"] for r in summary.results)
     console.print(f"[dim]{t(config, 'space_would_free')}: [bold]{total_mb:.1f} MB[/][/]")
-    console.print()
+    wait_enter(config)
 
 
 def run_limpiar(config: Config) -> None:
@@ -334,6 +374,7 @@ def run_limpiar(config: Config) -> None:
     total = len(summary.results)
     if total == 0:
         console.print(f"[green]{t(config, 'nothing_to_clean')}[/]")
+        wait_enter(config)
         return
     console.print(f"[green]{t(config, 'found_folders')}: [bold]{total}[/] {t(config, 'folders')}[/]")
     total_mb = sum(r["size_mb"] for r in summary.results)
@@ -386,7 +427,7 @@ def run_limpiar(config: Config) -> None:
         )
     )
     console.print(f"[dim]{t(config, 'marker_note')}[/]")
-    console.print()
+    wait_enter(config)
 
 
 def run_ver_sistema(config: Config) -> None:
@@ -414,7 +455,7 @@ def run_ver_sistema(config: Config) -> None:
     table.add_row(t(config, "field_disk_free"), info["disk_free"])
     table.add_row(t(config, "field_disk_usage"), disk_bar)
     console.print(Panel(table, title=t(config, "system_title"), border_style="cyan", box=box.ROUNDED))
-    console.print()
+    wait_enter(config)
 
 
 def run_historial(config: Config) -> None:
@@ -422,6 +463,7 @@ def run_historial(config: Config) -> None:
     runs = RunSummary.load_all()
     if not runs:
         console.print(f"[dim]{t(config, 'history_empty')}[/]")
+        wait_enter(config)
         return
     total_liberado = sum(r["total_freed_mb"] for r in runs)
     total_ejecuciones = len(runs)
@@ -438,12 +480,29 @@ def run_historial(config: Config) -> None:
         tipo = f"[dim]{t(config, 'type_dry')}[/]" if r["dry_run"] else f"[green]{t(config, 'type_clean')}[/]"
         table.add_row(r["timestamp"], tipo, str(len(r["results"])), f"{r['total_freed_mb']:.1f} MB")
     console.print(table)
-    console.print()
+    wait_enter(config)
+
+
+def _open_config_in_editor(config: Config) -> bool:
+    """Abre config.toml con $EDITOR o nano. Devuelve True si se abrió."""
+    from simple_dev_cleaner._config import CONFIG_FILE
+    editor = os.environ.get("EDITOR", "nano").strip()
+    path = str(CONFIG_FILE)
+    if not CONFIG_FILE.exists():
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        Config.load().save()
+    try:
+        parts = shlex.split(editor) or [editor]
+        subprocess.run(parts + [path], check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
 
 
 def run_configurar(config: Config) -> None:
     n = len(config.scan_dirs)
     lang_label = "Español" if config.lang == "es" else "English"
+    config_choices = ["0", "1", "2", "3", "4", "5", "6"]
     while True:
         console.print()
         console.print(f"[bold]{t(config, 'config_title')}[/]")
@@ -452,14 +511,13 @@ def run_configurar(config: Config) -> None:
         console.print(f"  [cyan]3[/]  {t(config, 'config_3')}")
         console.print(f"  [cyan]4[/]  {t(config, 'config_4', config.unused_hours)}")
         console.print(f"  [cyan]5[/]  {t(config, 'config_5', lang_label)}")
+        console.print(f"  [cyan]6[/]  {t(config, 'config_6')}")
         console.print(f"  [cyan]0[/]  {t(config, 'config_0')}")
+        console.print(f"  {t(config, 'hint_back')}")
         console.print()
         try:
-            op = Prompt.ask(
-                t(config, "config_prompt"),
-                choices=["0", "1", "2", "3", "4", "5"],
-                default="0",
-            )
+            raw = (Prompt.ask(t(config, "config_prompt"), default="0") or "0").strip()
+            op = _normalize_choice(raw, config_choices)
         except Exception:
             op = "0"
         if op == "0":
@@ -484,16 +542,38 @@ def run_configurar(config: Config) -> None:
             if not ruta:
                 console.print(f"[yellow]{t(config, 'path_empty')}[/]")
                 continue
-            path = Path(ruta).expanduser().resolve()
-            if not path.exists() or not path.is_dir():
-                console.print(f"[red]{t(config, 'path_not_found')}[/]")
+            if ruta.lower() == "q":
                 continue
-            if str(path) in config.scan_dirs:
+            # Varias rutas separadas por coma (o por línea si pegan varias)
+            parts = [p.strip() for p in ruta.replace("\n", ",").split(",") if p.strip()]
+            added = 0
+            skipped = 0
+            for part in parts:
+                if part.lower() == "q":
+                    break
+                path = Path(part).expanduser().resolve()
+                if not path.exists() or not path.is_dir():
+                    skipped += 1
+                    continue
+                if str(path) in config.scan_dirs:
+                    skipped += 1
+                    continue
+                config.scan_dirs.append(str(path))
+                added += 1
+            if added > 0:
+                config.save()
+                if added == 1 and skipped == 0:
+                    console.print(f"[green]{t(config, 'path_added')}[/]")
+                else:
+                    console.print(f"[green]{t(config, 'paths_added', added)}[/]", end="")
+                    if skipped > 0:
+                        console.print(f"[dim]{t(config, 'paths_skipped', skipped)}[/]")
+                    else:
+                        console.print()
+            elif skipped > 0:
                 console.print(f"[yellow]{t(config, 'path_already')}[/]")
             else:
-                config.scan_dirs.append(str(path))
-                config.save()
-                console.print(f"[green]{t(config, 'path_added')}[/]")
+                console.print(f"[red]{t(config, 'path_not_found')}[/]")
         elif op == "3":
             if not config.scan_dirs:
                 console.print(f"[dim]{t(config, 'no_folders_configured')}[/]")
@@ -504,7 +584,9 @@ def run_configurar(config: Config) -> None:
                 console.print(f"  [cyan]{i}.[/] {short}")
             console.print()
             try:
-                raw = (Prompt.ask(t(config, "which_remove"), default="0") or "0").strip()
+                raw = (Prompt.ask(t(config, "which_remove") + " " + t(config, "hint_q_cancel"), default="0") or "0").strip()
+                if raw.lower() == "q":
+                    continue
                 idx = int(raw)
             except ValueError:
                 console.print(f"[red]{t(config, 'number_invalid', n)}[/]")
@@ -555,6 +637,18 @@ def run_configurar(config: Config) -> None:
                 config.save()
                 console.print(f"[green]{t(config, 'lang_saved_es')}[/]")
             lang_label = "English" if config.lang == "en" else "Español"
+        elif op == "6":
+            console.print()
+            console.print(f"[dim]{t(config, 'edit_config')}[/]")
+            if _open_config_in_editor(config):
+                try:
+                    config = Config.load()
+                    console.print(f"[green]{t(config, 'edit_done')}[/]")
+                except Exception:
+                    pass
+            else:
+                console.print(f"[red]{t(config, 'edit_fail')}[/]")
+            wait_enter(config)
 
 
 def main() -> None:
@@ -581,6 +675,7 @@ def main() -> None:
                 run_historial(config)
             elif opcion == "5":
                 run_configurar(config)
+                config = Config.load()
         except KeyboardInterrupt:
             console.print("\n[dim]Interrumpido. Volvé a elegir una opción.[/]")
         except Exception as e:

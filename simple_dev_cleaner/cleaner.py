@@ -38,9 +38,20 @@ def _load_toml(path: Path) -> dict:
         return tomllib.load(f)
 
 
+def _sanitize_for_toml(obj):  # noqa: ANN001
+    """Quita valores None (TOML no los soporta) de dicts/listas de forma recursiva."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_toml(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_sanitize_for_toml(x) for x in obj]
+    return obj
+
+
 def _save_toml(path: Path, data: dict) -> None:
-    """Guarda un dict como TOML."""
-    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    """Guarda un dict como TOML (sin valores None)."""
+    path.write_text(tomli_w.dumps(_sanitize_for_toml(data)), encoding="utf-8")
 
 
 @dataclass
