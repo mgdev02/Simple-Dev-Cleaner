@@ -335,7 +335,9 @@ def print_banner(config: Config) -> None:
     else:
         disk_bar = "[green]"
     disk_bar += "█" * int(pct / 5) + "[/][dim]" + "░" * (20 - int(pct / 5)) + "[/] " + f"{pct:.0f}%"
-    disk_line = f"[dim]{t(config, 'field_disk_total')}[/] {info['disk_total']}  [dim]{t(config, 'field_disk_used')}[/] {info['disk_used']}  [dim]{t(config, 'field_disk_free')}[/] {info['disk_free']}  [dim]{t(config, 'field_disk_usage')}[/] {disk_bar}"
+    disk_line1 = f"[dim]{t(config, 'field_disk_total')}[/] {info['disk_total']}  [dim]{t(config, 'field_disk_used')}[/] {info['disk_used']}  [dim]{t(config, 'field_disk_free')}[/] {info['disk_free']}"
+    disk_line2 = f"[dim]{t(config, 'field_disk_usage')}[/] {disk_bar}"
+    disk_content = Group(disk_line1, disk_line2)
     header_table = Table.grid(expand=True)
     header_table.add_column(justify="left")
     header_table.add_column(justify="right")
@@ -344,7 +346,7 @@ def print_banner(config: Config) -> None:
         f"[dim]{date_str}[/]",
     )
     disk_panel = Panel(
-        disk_line,
+        disk_content,
         box=box.ROUNDED,
         border_style="dim",
         padding=(0, 1),

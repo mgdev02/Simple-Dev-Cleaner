@@ -1,5 +1,6 @@
 """Run pip/pipx upgrade from GitHub (main branch)."""
 
+import shutil
 import subprocess
 import sys
 
@@ -9,21 +10,23 @@ INSTALL_URL = f"git+https://github.com/{GITHUB_REPO}.git"
 
 def run_update() -> bool:
     """
-    Run upgrade: try pipx first, then pip install --user --upgrade.
+    Run upgrade: try pipx from PATH first, then pip.
     Return True if upgrade was run successfully.
     """
-    # Prefer pipx (recommended install method)
-    try:
-        r = subprocess.run(
-            [sys.executable, "-m", "pipx", "upgrade", "simple-dev-cleaner"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if r.returncode == 0:
-            return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    # Prefer pipx (must use binary from PATH when we run inside pipx venv)
+    pipx_path = shutil.which("pipx")
+    if pipx_path:
+        try:
+            r = subprocess.run(
+                [pipx_path, "upgrade", "simple-dev-cleaner"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if r.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
     # Fallback: pip install --user --upgrade
     try:
         r = subprocess.run(
@@ -49,24 +52,19 @@ def run_update() -> bool:
 def run_update_background() -> None:
     """
     Start upgrade in background (pipx or pip). Does not block.
-    Next time the user runs sdevclean they will have the new version.
     """
-    try:
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "pipx",
-                "upgrade",
-                "simple-dev-cleaner",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return
-    except (FileNotFoundError, OSError):
-        pass
+    pipx_path = shutil.which("pipx")
+    if pipx_path:
+        try:
+            subprocess.Popen(
+                [pipx_path, "upgrade", "simple-dev-cleaner"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return
+        except (FileNotFoundError, OSError):
+            pass
     try:
         subprocess.Popen(
             [
