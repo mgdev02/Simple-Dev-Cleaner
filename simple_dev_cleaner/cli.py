@@ -32,6 +32,12 @@ from simple_dev_cleaner.cleaner import (
     delete_from_summary,
 )
 from simple_dev_cleaner.system_info import get_system_info
+from simple_dev_cleaner import __version__ as CURRENT_VERSION
+from simple_dev_cleaner.update_check import (
+    get_latest_version,
+    has_newer_version,
+    run_update,
+)
 
 console = Console()
 
@@ -150,6 +156,10 @@ TEXTS = {
         "interrupted": "Interrumpido. Volvé a elegir una opción.",
         "error_unexpected": "Error inesperado",
         "error_hint": "Si se repite, revisá ~/.config/simple-dev-cleaner/config.toml o borrá history.toml y probá de nuevo.",
+        "update_available": "Hay una nueva versión [bold]{}[/] (tenés {}).",
+        "update_running": "Actualizando…",
+        "update_done": "Listo. Ejecutá [bold]sdevclean[/] de nuevo para usar la nueva versión.",
+        "update_fail": "No se pudo actualizar. Actualizá manualmente: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
     "en": {
         "app_subtitle": "Dependency cleaner",
@@ -264,6 +274,10 @@ TEXTS = {
         "interrupted": "Interrupted. Choose an option again.",
         "error_unexpected": "Unexpected error",
         "error_hint": "If it happens again, check ~/.config/simple-dev-cleaner/config.toml or delete history.toml and try again.",
+        "update_available": "A new version [bold]{}[/] is available (you have {}).",
+        "update_running": "Updating…",
+        "update_done": "Done. Run [bold]sdevclean[/] again to use the new version.",
+        "update_fail": "Could not update. Update manually: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
 }
 
@@ -336,7 +350,7 @@ def print_banner(config: Config) -> None:
     banner_table.add_column(justify="right")
     banner_table.add_row(
         f"[bold cyan]Simple Dev Cleaner[/] [dim]— {t(config, 'app_subtitle')}[/]",
-        f"[dim]{date_str}[/]",
+        f"[dim]By mgdev02[/]  [dim]{date_str}[/]",
     )
     banner_table.add_row(disk_line, "")
     console.print(
@@ -729,6 +743,21 @@ def main() -> None:
         config.save()
 
     print_banner(config)
+
+    # Check for updates (auto-update when newer version on GitHub)
+    try:
+        latest = get_latest_version()
+        if latest and has_newer_version(CURRENT_VERSION, latest):
+            console.print(f"[green]{t(config, 'update_available', latest, CURRENT_VERSION)}[/]")
+            console.print(f"[dim]{t(config, 'update_running')}[/]")
+            if run_update():
+                console.print(f"[green]{t(config, 'update_done')}[/]")
+                sys.exit(0)
+            else:
+                console.print(f"[yellow]{t(config, 'update_fail')}[/]")
+    except Exception:
+        pass
+
     if not HISTORY_FILE.exists():
         console.print(t(config, "first_run_tip"))
         console.print()
