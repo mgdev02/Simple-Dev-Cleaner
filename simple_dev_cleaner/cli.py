@@ -83,7 +83,8 @@ TEXTS = {
         "deleting": "Eliminando...",
         "result_title": "Resultado",
         "space_freed": "Espacio liberado",
-        "folders_deleted": "Carpetas eliminadas",
+        "folders_deleted": "Carpetas/archivos eliminados",
+        "freed_less_note": "[dim]{} no se pudo liberar (en uso o sin permiso).[/]",
         "marker_note": "En cada carpeta padre se creó el archivo [bold]install_packages_again[/] para que sepas que tenés que reinstalar dependencias.",
         "error_deleting": "Error",
         "system_title": "Sistema",
@@ -192,7 +193,8 @@ TEXTS = {
         "deleting": "Deleting...",
         "result_title": "Result",
         "space_freed": "Space freed",
-        "folders_deleted": "Folders deleted",
+        "folders_deleted": "Items deleted",
+        "freed_less_note": "[dim]{} could not be freed (in use or permission).[/]",
         "marker_note": "A file [bold]install_packages_again[/] was created in each parent folder so you know you need to reinstall dependencies.",
         "error_deleting": "Error",
         "system_title": "System",
@@ -310,6 +312,17 @@ def format_unused_hours(hours: int) -> str:
 def print_banner(config: Config) -> None:
     console.print()
     fecha = datetime.now().strftime("%H:%M %d/%m/%Y")
+    with console.status(f"[dim]{t(config, 'system_loading')}[/]", spinner="dots"):
+        info = get_system_info()
+    pct = info["disk_pct"]
+    if pct >= 90:
+        disk_bar = "[red]"
+    elif pct >= 75:
+        disk_bar = "[yellow]"
+    else:
+        disk_bar = "[green]"
+    disk_bar += "█" * int(pct / 5) + "[/][dim]" + "░" * (20 - int(pct / 5)) + "[/] " + f"{pct:.0f}%"
+    disk_line = f"[dim]{t(config, 'field_disk_total')}[/] {info['disk_total']}  [dim]{t(config, 'field_disk_used')}[/] {info['disk_used']}  [dim]{t(config, 'field_disk_free')}[/] {info['disk_free']}  [dim]{t(config, 'field_disk_usage')}[/] {disk_bar}"
     banner_table = Table.grid(expand=True)
     banner_table.add_column(justify="left")
     banner_table.add_column(justify="right")
@@ -317,6 +330,7 @@ def print_banner(config: Config) -> None:
         f"[bold cyan]Simple Dev Cleaner[/] [dim]— {t(config, 'app_subtitle')}[/]",
         f"[dim]{fecha}[/]",
     )
+    banner_table.add_row(disk_line, "")
     console.print(
         Panel(
             banner_table,
@@ -329,15 +343,14 @@ def print_banner(config: Config) -> None:
 
 
 def menu_principal(config: Config) -> str:
-    choices = ["0", "1", "2", "3", "4", "5"]
+    choices = ["0", "1", "2", "3", "4"]
     console.print(f"[bold]{t(config, 'menu_title')}[/]")
     if sys.stdin.isatty():
         menu_choices = [
             Choice(t(config, "menu_1"), value="1"),
             Choice(t(config, "menu_2"), value="2"),
-            Choice(t(config, "menu_3"), value="3"),
-            Choice(t(config, "menu_4"), value="4"),
-            Choice(t(config, "menu_5"), value="5"),
+            Choice(t(config, "menu_4"), value="3"),  # Historial
+            Choice(t(config, "menu_5"), value="4"),  # Configuración
             Choice(t(config, "menu_0"), value="0"),
         ]
         try:
@@ -467,9 +480,13 @@ def run_dry_run(config: Config) -> None:
                 summary.results = [{**r, "deleted": True} for r in summary.results]
                 summary.save()
                 console.print()
+                expected_mb = sum(r["size_mb"] for r in summary.results)
+                body = f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]"
+                if freed < expected_mb - 0.1:
+                    body += f"\n[dim]{t(config, 'freed_less_note', format_size_mb(expected_mb - freed))}[/]"
                 console.print(
                     Panel(
-                        f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]",
+                        body,
                         title=t(config, "result_title"),
                         border_style="green",
                         box=box.ROUNDED,
@@ -558,9 +575,13 @@ def run_limpiar(config: Config) -> None:
     summary.results = [{**r, "deleted": True} for r in summary.results]
     summary.save()
     console.print()
+    expected_mb = sum(r["size_mb"] for r in summary.results)
+    body = f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]"
+    if freed < expected_mb - 0.1:
+        body += f"\n[dim]{t(config, 'freed_less_note', format_size_mb(expected_mb - freed))}[/]"
     console.print(
         Panel(
-            f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]",
+            body,
             title=t(config, "result_title"),
             border_style="green",
             box=box.ROUNDED,
@@ -568,33 +589,6 @@ def run_limpiar(config: Config) -> None:
     )
     console.print(f"[dim]{t(config, 'marker_note')}[/]")
     wait_enter(config)
-
-
-def run_ver_sistema(config: Config) -> None:
-    console.print()
-    with console.status(f"[bold blue]{t(config, 'system_loading')}[/]", spinner="dots"):
-        info = get_system_info()
-    pct = info["disk_pct"]
-    if pct >= 90:
-        disk_bar = "[red]"
-    elif pct >= 75:
-        disk_bar = "[yellow]"
-    else:
-        disk_bar = "[green]"
-    disk_bar += "█" * int(pct / 5) + "[/][dim]" + "░" * (20 - int(pct / 5)) + "[/] " + f"{pct:.0f}%"
-    table = Table(box=box.ROUNDED, border_style="cyan", show_header=False)
-    table.add_column("", style="dim")
-    table.add_column("", style="bold")
-    table.add_row(t(config, "field_chip"), info["chip"])
-    table.add_row(t(config, "field_arch"), info["arch"])
-    table.add_row(t(config, "field_ram"), info["ram"])
-    table.add_row(t(config, "field_macos"), info["macos"])
-    table.add_row(t(config, "field_hostname"), info["hostname"])
-    table.add_row(t(config, "field_disk_total"), info["disk_total"])
-    table.add_row(t(config, "field_disk_used"), info["disk_used"])
-    table.add_row(t(config, "field_disk_free"), info["disk_free"])
-    table.add_row(t(config, "field_disk_usage"), disk_bar)
-    console.print(Panel(table, title=t(config, "system_title"), border_style="cyan", box=box.ROUNDED))
 
 
 def run_historial(config: Config) -> None:
@@ -829,10 +823,8 @@ def main() -> None:
             elif opcion == "2":
                 run_limpiar(config)
             elif opcion == "3":
-                run_ver_sistema(config)
-            elif opcion == "4":
                 run_historial(config)
-            elif opcion == "5":
+            elif opcion == "4":
                 run_configurar(config)
                 config = Config.load()
         except KeyboardInterrupt:
