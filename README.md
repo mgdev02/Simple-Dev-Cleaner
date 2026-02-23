@@ -6,58 +6,16 @@
 
 ## Instalación
 
-Una sola línea (estilo Homebrew):
+Una sola línea:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mgdev02/Simple-Dev-Cleaner/main/install.sh)"
 ```
 
-El script usa **pipx** si está instalado, o **pip** en su lugar. Luego ejecutá:
+Luego ejecutá:
 
 ```bash
 sdevclean
-```
-
----
-
-### Opción manual con pipx
-
-[pipx](https://pypa.github.io/pipx/) instala la herramienta en un entorno aislado:
-
-```bash
-pipx install git+https://github.com/mgdev02/Simple-Dev-Cleaner.git
-```
-
-Si no tenés pipx: `brew install pipx` y luego `pipx ensurepath`.
-
-Al terminar verás algo como:
-
-```
-These apps are now globally available
-  - sdevclean
-done! ✨ 🌟 ✨
-```
-
-Ejecutá en cualquier carpeta:
-
-```bash
-sdevclean
-```
-
-### Con pip (instalación de usuario)
-
-```bash
-pip install --user git+https://github.com/mgdev02/Simple-Dev-Cleaner.git
-```
-
-El ejecutable queda en un directorio que debe estar en tu PATH. En macOS suele ser:
-
-- `~/Library/Python/3.12/bin` (o la versión de Python que uses)
-
-Si `sdevclean` no se encuentra, añadí ese directorio a tu shell. Por ejemplo en `~/.zshrc`:
-
-```bash
-export PATH="$HOME/Library/Python/3.12/bin:$PATH"
 ```
 
 ---
