@@ -11,7 +11,10 @@ build/
 # Config/historial local (cada usuario tiene el suyo)
 config.json
 history.json
+config.toml
+history.toml
 cleaner.log
+*.json.bak
 
 # IDE / OS
 .DS_Store
