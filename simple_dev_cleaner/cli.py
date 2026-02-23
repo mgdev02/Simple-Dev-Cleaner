@@ -6,10 +6,12 @@ Simple Dev Cleaner — Menú manual, colores, loadings, idioma persistente (es/e
 import os
 import shlex
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from questionary import select, Choice
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -44,7 +46,7 @@ TEXTS = {
         "menu_4": "Ver historial de limpiezas",
         "menu_5": "Configuración (carpetas, umbral, idioma)",
         "menu_0": "Salir",
-        "prompt_option": "Elegí una opción",
+        "prompt_option": "Elegí una opción (↑ ↓ flechas, Enter)",
         "hint_exit": "[dim](0 o q = salir)[/]",
         "bye": "Chau.",
         "press_enter": "[dim]Enter para continuar[/]",
@@ -105,7 +107,7 @@ TEXTS = {
         "config_5": "Cambiar idioma / Language (actual: {})",
         "config_0": "Volver al menú principal",
         "config_6": "Abrir config.toml en el editor (nano, vim, etc.)",
-        "config_prompt": "Opción",
+        "config_prompt": "Opción (↑ ↓ flechas, Enter)",
         "hint_back": "[dim](0 o q = volver)[/]",
         "folders_list": "Carpetas que se escanean",
         "exists": "existe",
@@ -144,7 +146,7 @@ TEXTS = {
         "menu_4": "Cleanup history",
         "menu_5": "Settings (folders, threshold, language)",
         "menu_0": "Exit",
-        "prompt_option": "Choose an option",
+        "prompt_option": "Choose an option (↑ ↓ arrows, Enter)",
         "hint_exit": "[dim](0 or q = exit)[/]",
         "bye": "Bye.",
         "press_enter": "[dim]Press Enter to continue[/]",
@@ -205,7 +207,7 @@ TEXTS = {
         "config_5": "Change language / Idioma (current: {})",
         "config_0": "Back to main menu",
         "config_6": "Open config.toml in editor (nano, vim, etc.)",
-        "config_prompt": "Option",
+        "config_prompt": "Option (↑ ↓ arrows, Enter)",
         "hint_back": "[dim](0 or q = back)[/]",
         "folders_list": "Folders being scanned",
         "exists": "exists",
@@ -290,14 +292,25 @@ def print_banner(config: Config) -> None:
 def menu_principal(config: Config) -> str:
     choices = ["0", "1", "2", "3", "4", "5"]
     console.print(f"[bold]{t(config, 'menu_title')}[/]")
-    console.print(f"  [cyan]1[/]  {t(config, 'menu_1')}")
-    console.print(f"  [cyan]2[/]  {t(config, 'menu_2')}")
-    console.print(f"  [cyan]3[/]  {t(config, 'menu_3')}")
-    console.print(f"  [cyan]4[/]  {t(config, 'menu_4')}")
-    console.print(f"  [cyan]5[/]  {t(config, 'menu_5')}")
-    console.print(f"  [cyan]0[/]  {t(config, 'menu_0')}")
-    console.print(f"  {t(config, 'hint_exit')}")
-    console.print()
+    if sys.stdin.isatty():
+        menu_choices = [
+            Choice(t(config, "menu_1"), value="1"),
+            Choice(t(config, "menu_2"), value="2"),
+            Choice(t(config, "menu_3"), value="3"),
+            Choice(t(config, "menu_4"), value="4"),
+            Choice(t(config, "menu_5"), value="5"),
+            Choice(t(config, "menu_0"), value="0"),
+        ]
+        try:
+            result = select(
+                t(config, "prompt_option"),
+                choices=menu_choices,
+                use_shortcuts=False,
+            ).ask()
+            return result if result is not None else "0"
+        except (KeyboardInterrupt, EOFError):
+            return "0"
+    # Sin TTY (script/pipe): fallback a entrada por número
     try:
         raw = (Prompt.ask(f"[bold]{t(config, 'prompt_option')}[/]", default="0") or "0").strip()
         return _normalize_choice(raw, choices)
@@ -504,22 +517,32 @@ def run_configurar(config: Config) -> None:
     lang_label = "Español" if config.lang == "es" else "English"
     config_choices = ["0", "1", "2", "3", "4", "5", "6"]
     while True:
-        console.print()
-        console.print(f"[bold]{t(config, 'config_title')}[/]")
-        console.print(f"  [cyan]1[/]  {t(config, 'config_1')}")
-        console.print(f"  [cyan]2[/]  {t(config, 'config_2')}")
-        console.print(f"  [cyan]3[/]  {t(config, 'config_3')}")
-        console.print(f"  [cyan]4[/]  {t(config, 'config_4', config.unused_hours)}")
-        console.print(f"  [cyan]5[/]  {t(config, 'config_5', lang_label)}")
-        console.print(f"  [cyan]6[/]  {t(config, 'config_6')}")
-        console.print(f"  [cyan]0[/]  {t(config, 'config_0')}")
-        console.print(f"  {t(config, 'hint_back')}")
-        console.print()
-        try:
-            raw = (Prompt.ask(t(config, "config_prompt"), default="0") or "0").strip()
-            op = _normalize_choice(raw, config_choices)
-        except Exception:
-            op = "0"
+        console.print(f"\n[bold]{t(config, 'config_title')}[/]")
+        if sys.stdin.isatty():
+            config_menu_choices = [
+                Choice(t(config, "config_1"), value="1"),
+                Choice(t(config, "config_2"), value="2"),
+                Choice(t(config, "config_3"), value="3"),
+                Choice(t(config, "config_4", config.unused_hours), value="4"),
+                Choice(t(config, "config_5", lang_label), value="5"),
+                Choice(t(config, "config_6"), value="6"),
+                Choice(t(config, "config_0"), value="0"),
+            ]
+            try:
+                op = select(
+                    t(config, "config_prompt"),
+                    choices=config_menu_choices,
+                    use_shortcuts=False,
+                ).ask()
+                op = op if op is not None else "0"
+            except (KeyboardInterrupt, EOFError):
+                op = "0"
+        else:
+            try:
+                raw = (Prompt.ask(t(config, "config_prompt"), default="0") or "0").strip()
+                op = _normalize_choice(raw, config_choices)
+            except Exception:
+                op = "0"
         if op == "0":
             break
         if op == "1":
