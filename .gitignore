@@ -16,6 +16,9 @@ history.toml
 cleaner.log
 *.json.bak
 
+# Legacy (no usados por la CLI)
+widget/
+
 # IDE / OS
 .DS_Store
 .idea/
