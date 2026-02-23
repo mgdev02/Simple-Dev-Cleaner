@@ -376,7 +376,7 @@ def main_menu(config: Config) -> str:
                 t(config, "prompt_option"),
                 choices=menu_choices,
                 use_shortcuts=False,
-                instruction=None,
+                instruction="",
             ).ask()
             return result if result is not None else "0"
         except (KeyboardInterrupt, EOFError):
@@ -451,7 +451,7 @@ def run_dry_run(config: Config) -> None:
                 Choice(t(config, "dry_run_yes_run"), value=True),
             ],
             use_shortcuts=False,
-            instruction=None,
+            instruction="",
         ).ask()
         run_clean_now = run_choice if run_choice is not None else False
     if run_clean_now:
@@ -466,7 +466,7 @@ def run_dry_run(config: Config) -> None:
                         Choice(t(config, "confirm_yes"), value=True),
                     ],
                     use_shortcuts=False,
-                    instruction=None,
+                    instruction="",
                 ).ask()
                 do_delete = confirm_choice if confirm_choice is not None else False
             else:
@@ -581,7 +581,7 @@ def run_settings(config: Config) -> None:
                     t(config, "config_prompt"),
                     choices=config_menu_choices,
                     use_shortcuts=False,
-                    instruction=None,
+                    instruction="",
                 ).ask()
                 op = op if op is not None else "0"
             except (KeyboardInterrupt, EOFError):
@@ -664,7 +664,7 @@ def run_settings(config: Config) -> None:
                         t(config, "which_remove"),
                         choices=remove_choices,
                         use_shortcuts=False,
-                        instruction=None,
+                        instruction="",
                     ).ask()
                     idx = idx if idx is not None else -1
                 else:
