@@ -63,6 +63,9 @@ TEXTS = {
         "col_size": "Tamaño",
         "col_unused": "Sin uso",
         "space_would_free": "Espacio que se liberaría",
+        "dry_run_run_clean": "¿Querés ejecutar la limpieza real ahora?",
+        "dry_run_yes_run": "Sí, ejecutar limpieza",
+        "dry_run_no_back": "No, volver al menú",
         "clean_title": "Limpieza real",
         "clean_desc": "Se buscan carpetas y, si confirmás, se eliminan.",
         "nothing_to_clean": "No hay nada que limpiar.",
@@ -166,6 +169,9 @@ TEXTS = {
         "col_size": "Size",
         "col_unused": "Unused",
         "space_would_free": "Space that would be freed",
+        "dry_run_run_clean": "Do you want to run the real clean now?",
+        "dry_run_yes_run": "Yes, run clean",
+        "dry_run_no_back": "No, back to menu",
         "clean_title": "Real cleanup",
         "clean_desc": "I'll scan for folders and, if you confirm, delete them.",
         "nothing_to_clean": "Nothing to clean.",
@@ -274,6 +280,13 @@ def _normalize_choice(raw: str, choices: list[str]) -> str:
     return s if s in choices else "0"
 
 
+def format_size_mb(mb: float) -> str:
+    """Formatea MB a 'X.X GB' si >= 1024, sino 'X.X MB'."""
+    if mb >= 1024:
+        return f"{mb / 1024:.1f} GB"
+    return f"{mb:.1f} MB"
+
+
 def print_banner(config: Config) -> None:
     console.print()
     fecha = datetime.now().strftime("%H:%M %d/%m/%Y")
@@ -364,10 +377,80 @@ def run_dry_run(config: Config) -> None:
     table.add_column(t(config, "col_unused"), justify="right", width=10)
     for i, r in enumerate(summary.results, 1):
         short = r["path"].replace(str(Path.home()), "~")
-        table.add_row(str(i), short, r["name"], f"{r['size_mb']} MB", f"{r['unused_hours']} h")
+        table.add_row(str(i), short, r["name"], format_size_mb(r["size_mb"]), f"{r['unused_hours']} h")
     console.print(table)
     total_mb = sum(r["size_mb"] for r in summary.results)
-    console.print(f"[dim]{t(config, 'space_would_free')}: [bold]{total_mb:.1f} MB[/][/]")
+    console.print(f"[dim]{t(config, 'space_would_free')}: [bold]{format_size_mb(total_mb)}[/][/]")
+    console.print()
+    # Preguntar si quiere ejecutar la limpieza real
+    run_clean_now = False
+    if sys.stdin.isatty():
+        run_choice = select(
+            t(config, "dry_run_run_clean"),
+            choices=[
+                Choice(t(config, "dry_run_no_back"), value=False),
+                Choice(t(config, "dry_run_yes_run"), value=True),
+            ],
+            use_shortcuts=False,
+        ).ask()
+        run_clean_now = run_choice if run_choice is not None else False
+    if run_clean_now:
+        try:
+            if sys.stdin.isatty():
+                confirm_choice = select(
+                    t(config, "confirm_delete"),
+                    choices=[
+                        Choice(t(config, "confirm_no"), value=False),
+                        Choice(t(config, "confirm_yes"), value=True),
+                    ],
+                    use_shortcuts=False,
+                ).ask()
+                do_delete = confirm_choice if confirm_choice is not None else False
+            else:
+                do_delete = Confirm.ask(
+                    f"[yellow]{t(config, 'confirm_delete')}[/]\n{t(config, 'confirm_yes_no')}",
+                    default=False,
+                )
+            if do_delete:
+                console.print()
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[bold green]{task.description}[/]"),
+                    BarColumn(bar_width=40, complete_style="green", finished_style="green"),
+                    TaskProgressColumn(),
+                    TextColumn("[dim]{task.fields[status]}[/]"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task(t(config, "deleting"), total=total, status="", completed=0)
+
+                    def on_delete(current: int, total_n: int, r: dict, err: str | None) -> None:
+                        pct = (current / total_n) * 100 if total_n else 0
+                        status = r["path"].replace(str(Path.home()), "~")
+                        if len(status) > 50:
+                            status = "..." + status[-47:]
+                        if err:
+                            status = f"[red]{t(config, 'error_deleting')}: {status}[/]"
+                        progress.update(task_id=task, completed=current, percent=pct, status=status)
+
+                    freed = delete_from_summary(summary, progress_cb=on_delete)
+                    progress.update(task_id=task, completed=total, percent=100, status="[green]✓[/]")
+
+                summary.dry_run = False
+                summary.total_freed_mb = freed
+                summary.results = [{**r, "deleted": True} for r in summary.results]
+                summary.save()
+                console.print()
+                console.print(
+                    Panel(
+                        f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]",
+                        title=t(config, "result_title"),
+                        border_style="green",
+                        box=box.ROUNDED,
+                    )
+                )
+                console.print(f"[dim]{t(config, 'marker_note')}[/]")
+        except (KeyboardInterrupt, EOFError):
+            console.print(f"[dim]{t(config, 'cancelled')}[/]")
     wait_enter(config)
 
 
@@ -397,7 +480,7 @@ def run_limpiar(config: Config) -> None:
         return
     console.print(f"[green]{t(config, 'found_folders')}: [bold]{total}[/] {t(config, 'folders')}[/]")
     total_mb = sum(r["size_mb"] for r in summary.results)
-    console.print(f"{t(config, 'space_to_free')}: [bold]{total_mb:.1f} MB[/]")
+    console.print(f"{t(config, 'space_to_free')}: [bold]{format_size_mb(total_mb)}[/]")
     console.print()
     try:
         if sys.stdin.isatty():
@@ -451,7 +534,7 @@ def run_limpiar(config: Config) -> None:
     console.print()
     console.print(
         Panel(
-            f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{freed:.1f} MB[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]",
+            f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]",
             title=t(config, "result_title"),
             border_style="green",
             box=box.ROUNDED,
@@ -499,7 +582,7 @@ def run_historial(config: Config) -> None:
     total_liberado = sum(r["total_freed_mb"] for r in runs)
     total_ejecuciones = len(runs)
     table = Table(
-        title=f"{t(config, 'history_title')} — {t(config, 'history_total_freed')}: {total_liberado:.1f} MB ({total_ejecuciones} {t(config, 'history_runs')})",
+        title=f"{t(config, 'history_title')} — {t(config, 'history_total_freed')}: {format_size_mb(total_liberado)} ({total_ejecuciones} {t(config, 'history_runs')})",
         box=box.ROUNDED,
         header_style="bold cyan",
     )
@@ -509,7 +592,7 @@ def run_historial(config: Config) -> None:
     table.add_column(t(config, "col_freed"), justify="right", width=12)
     for r in runs[:25]:
         tipo = f"[dim]{t(config, 'type_dry')}[/]" if r["dry_run"] else f"[green]{t(config, 'type_clean')}[/]"
-        table.add_row(r["timestamp"], tipo, str(len(r["results"])), f"{r['total_freed_mb']:.1f} MB")
+        table.add_row(r["timestamp"], tipo, str(len(r["results"])), format_size_mb(r["total_freed_mb"]))
     console.print(table)
     wait_enter(config)
 
