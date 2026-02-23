@@ -143,7 +143,7 @@ TEXTS = {
         "hours_invalid": "Tiene que ser un número entre 1 y 8760 (horas).",
         "hours_saved": "Listo. A partir de ahora se consideran abandonadas las carpetas sin uso hace {} horas o más.",
         "lang_current": "Idioma actual",
-        "lang_choose": "Elegí idioma: [cyan]1[/] Español  [cyan]2[/] English",
+        "lang_choose": "Elegí idioma",
         "lang_invalid": "Elegí 1 (Español) o 2 (English).",
         "lang_prompt": "1 o 2",
         "lang_saved_es": "Idioma guardado: Español. Se aplica desde ya.",
@@ -154,7 +154,6 @@ TEXTS = {
         "check_updates": "Check updates",
         "downloading": "Downloading…",
         "updated": "Updated.",
-        "updated_next_run": "[dim]La próxima vez que ejecutes sdevclean tendrás la versión nueva.[/]",
         "update_fail": "No se pudo actualizar. Actualizá manualmente: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
     "en": {
@@ -262,7 +261,7 @@ TEXTS = {
         "hours_invalid": "Must be a number between 1 and 8760 (hours).",
         "hours_saved": "Saved. Folders unused for {} hours or more will now be considered abandoned.",
         "lang_current": "Current language",
-        "lang_choose": "Choose language: [cyan]1[/] Español  [cyan]2[/] English",
+        "lang_choose": "Choose language",
         "lang_invalid": "Choose 1 (Español) or 2 (English).",
         "lang_prompt": "1 or 2",
         "lang_saved_es": "Language saved: Spanish. It applies from now on.",
@@ -273,7 +272,6 @@ TEXTS = {
         "check_updates": "Check updates",
         "downloading": "Downloading…",
         "updated": "Updated.",
-        "updated_next_run": "[dim]Next time you run sdevclean you'll have the new version.[/]",
         "update_fail": "Could not update. Update manually: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
 }
@@ -773,7 +771,6 @@ def main() -> None:
             updated = run_update()
         if updated:
             console.print(f"[green]{t(config, 'updated')}[/]")
-            console.print(t(config, "updated_next_run"))
     except Exception:
         pass
 

@@ -1,4 +1,4 @@
-"""Run pip/pipx upgrade from GitHub (main branch)."""
+"""Run pip/pipx upgrade from GitHub (main branch, always latest commit)."""
 
 import os
 import shutil
@@ -6,8 +6,8 @@ import subprocess
 import sys
 
 GITHUB_REPO = "mgdev02/Simple-Dev-Cleaner"
-INSTALL_URL = f"git+https://github.com/{GITHUB_REPO}.git"
-INSTALL_SCRIPT_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/install.sh"
+INSTALL_URL = f"git+https://github.com/{GITHUB_REPO}.git@main"
+PKG_NAME = "simple-dev-cleaner"
 
 
 def _find_pipx() -> str | None:
@@ -37,8 +37,8 @@ def _env_with_full_path() -> dict[str, str]:
         "/bin",
     ]
     current = os.environ.get("PATH", "")
-    seen = set()
-    parts = []
+    seen: set[str] = set()
+    parts: list[str] = []
     for p in extra:
         if p not in seen:
             seen.add(p)
@@ -52,41 +52,29 @@ def _env_with_full_path() -> dict[str, str]:
 
 def run_update() -> bool:
     """
-    Run upgrade: pipx upgrade --force, or install script with --force, or pip.
+    Reinstall from the latest commit on main. pipx or pip fallback.
     Return True on success.
     """
     env = _env_with_full_path()
     pipx_path = _find_pipx()
+
+    # pipx: uninstall + install ensures we always get the newest commit,
+    # regardless of whether the version string changed.
     if pipx_path:
         try:
-            r = subprocess.run(
-                [pipx_path, "upgrade", "--force", "simple-dev-cleaner"],
+            subprocess.run(
+                [pipx_path, "install", "--force", INSTALL_URL,
+                 "--pip-args=--no-cache-dir"],
                 capture_output=True,
                 text=True,
                 timeout=120,
                 env=env,
             )
-            if r.returncode == 0:
-                return True
+            return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
-    # Fallback: run install script with --force (same as user would run)
-    try:
-        r = subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'curl -fsSL "{INSTALL_SCRIPT_URL}" | bash -s -- --force',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            env=env,
-        )
-        if r.returncode == 0:
-            return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+
+    # Fallback: pip install --force-reinstall --no-cache-dir from git
     try:
         r = subprocess.run(
             [
@@ -94,7 +82,6 @@ def run_update() -> bool:
                 "-m",
                 "pip",
                 "install",
-                "--user",
                 "--upgrade",
                 "--force-reinstall",
                 "--no-cache-dir",
@@ -112,17 +99,18 @@ def run_update() -> bool:
 
 
 def run_update_background() -> None:
-    """
-    Start upgrade in background (pipx or pip). Does not block.
-    """
+    """Start upgrade in background (pipx or pip). Does not block."""
+    env = _env_with_full_path()
     pipx_path = _find_pipx()
     if pipx_path:
         try:
             subprocess.Popen(
-                [pipx_path, "upgrade", "--force", "simple-dev-cleaner"],
+                [pipx_path, "install", "--force", INSTALL_URL,
+                 "--pip-args=--no-cache-dir"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
+                env=env,
             )
             return
         except (FileNotFoundError, OSError):
@@ -134,13 +122,15 @@ def run_update_background() -> None:
                 "-m",
                 "pip",
                 "install",
-                "--user",
                 "--upgrade",
+                "--force-reinstall",
+                "--no-cache-dir",
                 INSTALL_URL,
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
+            env=env,
         )
     except (FileNotFoundError, OSError):
         pass
