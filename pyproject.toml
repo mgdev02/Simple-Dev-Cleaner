@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple-dev-cleaner"
+version = "1.0.0"
+description = "Limpiador de dependencias de desarrollo para macOS — CLI con menú"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+sdevclean = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "cleaner", "system_info"]
