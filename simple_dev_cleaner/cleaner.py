@@ -30,6 +30,7 @@ DEFAULT_SCAN_DIRS = [
 ]
 
 DEFAULT_TARGETS = ["node_modules", "venv", ".venv", "env", "ENV"]
+DEFAULT_TARGET_FILES = [".DS_Store", "*.log", "Thumbs.db"]
 
 
 def _load_toml(path: Path) -> dict:
@@ -58,6 +59,7 @@ def _save_toml(path: Path, data: dict) -> None:
 class Config:
     scan_dirs: list[str] = field(default_factory=lambda: list(DEFAULT_SCAN_DIRS))
     target_names: list[str] = field(default_factory=lambda: list(DEFAULT_TARGETS))
+    target_files: list[str] = field(default_factory=lambda: list(DEFAULT_TARGET_FILES))
     interval_hours: int = 24
     unused_hours: int = 48
     enabled: bool = True
@@ -100,6 +102,7 @@ class CleanResult:
     size_mb: float
     unused_hours: int
     deleted: bool
+    is_file: bool = False
     error: Optional[str] = None
 
 
@@ -233,6 +236,7 @@ def scan(config: Config, dry_run: bool = True, progress_cb=None) -> RunSummary:
                     size_mb=round(size, 1),
                     unused_hours=hours,
                     deleted=False,
+                    is_file=False,
                 )
 
                 if not dry_run:
@@ -251,6 +255,45 @@ def scan(config: Config, dry_run: bool = True, progress_cb=None) -> RunSummary:
                 results.append(result)
                 if progress_cb:
                     progress_cb(result)
+
+    # Archivos (target_files: .DS_Store, *.log, etc.)
+    for scan_dir in config.scan_dirs:
+        scan_path = Path(scan_dir).expanduser()
+        if not scan_path.is_dir():
+            continue
+        file_patterns = getattr(config, "target_files", None) or []
+        for pattern in file_patterns:
+            try:
+                for found in scan_path.rglob(pattern):
+                    if not found.is_file():
+                        continue
+                    hours = _unused_hours(found)
+                    if hours < config.unused_hours:
+                        continue
+                    try:
+                        size = found.stat().st_size / (1024 * 1024)
+                    except OSError:
+                        size = 0.0
+                    result = CleanResult(
+                        path=str(found),
+                        name=found.name,
+                        size_mb=round(size, 4) if size < 0.01 else round(size, 2),
+                        unused_hours=hours,
+                        deleted=False,
+                        is_file=True,
+                    )
+                    if not dry_run:
+                        try:
+                            found.unlink()
+                            result.deleted = True
+                            total_freed += size
+                        except Exception as e:
+                            result.error = str(e)
+                    results.append(result)
+                    if progress_cb:
+                        progress_cb(result)
+            except PermissionError:
+                continue
 
     summary = RunSummary(
         timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -278,7 +321,7 @@ def _write_log(summary: RunSummary) -> None:
 
 
 def delete_from_summary(summary: RunSummary, progress_cb=None) -> float:
-    """Elimina las carpetas listadas en un summary. Retorna MB liberados."""
+    """Elimina las carpetas y archivos listados en un summary. Retorna MB liberados."""
     total_freed = 0.0
     results = summary.results
     for i, r in enumerate(results):
@@ -287,14 +330,18 @@ def delete_from_summary(summary: RunSummary, progress_cb=None) -> float:
             if progress_cb:
                 progress_cb(i + 1, len(results), r, None)
             continue
+        is_file = r.get("is_file", False)
         try:
             size_mb = r.get("size_mb", 0) or 0
-            shutil.rmtree(path)
-            marker = path.parent / "install_packages_again"
-            marker.write_text(
-                f"Carpeta '{path.name}' eliminada por Simple Dev Cleaner "
-                f"(sin uso por {r.get('unused_hours', 0)}h). Reinstalar dependencias.\n"
-            )
+            if is_file:
+                path.unlink()
+            else:
+                shutil.rmtree(path)
+                marker = path.parent / "install_packages_again"
+                marker.write_text(
+                    f"Carpeta '{path.name}' eliminada por Simple Dev Cleaner "
+                    f"(sin uso por {r.get('unused_hours', 0)}h). Reinstalar dependencias.\n"
+                )
             total_freed += size_mb
             if progress_cb:
                 progress_cb(i + 1, len(results), r, None)

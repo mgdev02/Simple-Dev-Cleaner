@@ -62,6 +62,9 @@ TEXTS = {
         "col_type": "Tipo",
         "col_size": "Tamaño",
         "col_unused": "Sin uso",
+        "type_folder": "carpeta",
+        "type_file": "archivo",
+        "col_name": "Nombre",
         "space_would_free": "Espacio que se liberaría",
         "dry_run_run_clean": "¿Querés ejecutar la limpieza real ahora?",
         "dry_run_yes_run": "Sí, ejecutar limpieza",
@@ -168,6 +171,9 @@ TEXTS = {
         "col_type": "Type",
         "col_size": "Size",
         "col_unused": "Unused",
+        "type_folder": "folder",
+        "type_file": "file",
+        "col_name": "Name",
         "space_would_free": "Space that would be freed",
         "dry_run_run_clean": "Do you want to run the real clean now?",
         "dry_run_yes_run": "Yes, run clean",
@@ -287,6 +293,20 @@ def format_size_mb(mb: float) -> str:
     return f"{mb:.1f} MB"
 
 
+def format_unused_hours(hours: int) -> str:
+    """Formatea horas a 'X h', '1 day', '2 days', '1 week', etc."""
+    if hours < 24:
+        return f"{hours} h"
+    if hours < 168:  # < 1 week
+        days = hours // 24
+        return "1 day" if days == 1 else f"{days} days"
+    if hours < 720:  # < ~1 month
+        weeks = hours // 168
+        return "1 week" if weeks == 1 else f"{weeks} weeks"
+    months = hours // 720
+    return "~1 month" if months == 1 else f"~{months} months"
+
+
 def print_banner(config: Config) -> None:
     console.print()
     fecha = datetime.now().strftime("%H:%M %d/%m/%Y")
@@ -361,7 +381,6 @@ def run_dry_run(config: Config) -> None:
     console.print()
     if total == 0:
         console.print(f"[dim]{t(config, 'none_match', config.unused_hours)}[/]")
-        wait_enter(config)
         return
 
     table = Table(
@@ -372,12 +391,20 @@ def run_dry_run(config: Config) -> None:
     )
     table.add_column("#", style="dim", width=4)
     table.add_column(t(config, "col_path"), overflow="fold")
-    table.add_column(t(config, "col_type"), width=14)
+    table.add_column(t(config, "col_name"), width=14)
+    table.add_column(t(config, "col_type"), width=8)
     table.add_column(t(config, "col_size"), justify="right", width=10)
-    table.add_column(t(config, "col_unused"), justify="right", width=10)
+    table.add_column(t(config, "col_unused"), justify="right", width=12)
     for i, r in enumerate(summary.results, 1):
         short = r["path"].replace(str(Path.home()), "~")
-        table.add_row(str(i), short, r["name"], format_size_mb(r["size_mb"]), f"{r['unused_hours']} h")
+        table.add_row(
+            str(i),
+            short,
+            r["name"],
+            t(config, "type_file") if r.get("is_file") else t(config, "type_folder"),
+            format_size_mb(r["size_mb"]),
+            format_unused_hours(r["unused_hours"]),
+        )
     console.print(table)
     total_mb = sum(r["size_mb"] for r in summary.results)
     console.print(f"[dim]{t(config, 'space_would_free')}: [bold]{format_size_mb(total_mb)}[/][/]")
@@ -449,9 +476,9 @@ def run_dry_run(config: Config) -> None:
                     )
                 )
                 console.print(f"[dim]{t(config, 'marker_note')}[/]")
+                wait_enter(config)
         except (KeyboardInterrupt, EOFError):
             console.print(f"[dim]{t(config, 'cancelled')}[/]")
-    wait_enter(config)
 
 
 def run_limpiar(config: Config) -> None:
@@ -476,7 +503,6 @@ def run_limpiar(config: Config) -> None:
     total = len(summary.results)
     if total == 0:
         console.print(f"[green]{t(config, 'nothing_to_clean')}[/]")
-        wait_enter(config)
         return
     console.print(f"[green]{t(config, 'found_folders')}: [bold]{total}[/] {t(config, 'folders')}[/]")
     total_mb = sum(r["size_mb"] for r in summary.results)
@@ -569,7 +595,6 @@ def run_ver_sistema(config: Config) -> None:
     table.add_row(t(config, "field_disk_free"), info["disk_free"])
     table.add_row(t(config, "field_disk_usage"), disk_bar)
     console.print(Panel(table, title=t(config, "system_title"), border_style="cyan", box=box.ROUNDED))
-    wait_enter(config)
 
 
 def run_historial(config: Config) -> None:
@@ -577,7 +602,6 @@ def run_historial(config: Config) -> None:
     runs = RunSummary.load_all()
     if not runs:
         console.print(f"[dim]{t(config, 'history_empty')}[/]")
-        wait_enter(config)
         return
     total_liberado = sum(r["total_freed_mb"] for r in runs)
     total_ejecuciones = len(runs)
@@ -594,7 +618,6 @@ def run_historial(config: Config) -> None:
         tipo = f"[dim]{t(config, 'type_dry')}[/]" if r["dry_run"] else f"[green]{t(config, 'type_clean')}[/]"
         table.add_row(r["timestamp"], tipo, str(len(r["results"])), format_size_mb(r["total_freed_mb"]))
     console.print(table)
-    wait_enter(config)
 
 
 def _open_config_in_editor(config: Config) -> bool:
@@ -785,7 +808,6 @@ def run_configurar(config: Config) -> None:
                     pass
             else:
                 console.print(f"[red]{t(config, 'edit_fail')}[/]")
-            wait_enter(config)
 
 
 def main() -> None:
