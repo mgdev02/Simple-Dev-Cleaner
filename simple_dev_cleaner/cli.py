@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from questionary import select, Choice
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.progress import (
@@ -345,28 +345,34 @@ def print_banner(config: Config) -> None:
         disk_bar = "[green]"
     disk_bar += "█" * int(pct / 5) + "[/][dim]" + "░" * (20 - int(pct / 5)) + "[/] " + f"{pct:.0f}%"
     disk_line = f"[dim]{t(config, 'field_disk_total')}[/] {info['disk_total']}  [dim]{t(config, 'field_disk_used')}[/] {info['disk_used']}  [dim]{t(config, 'field_disk_free')}[/] {info['disk_free']}  [dim]{t(config, 'field_disk_usage')}[/] {disk_bar}"
-    banner_table = Table.grid(expand=True)
-    banner_table.add_column(justify="left")
-    banner_table.add_column(justify="right")
-    banner_table.add_row(
+    header_table = Table.grid(expand=True)
+    header_table.add_column(justify="left")
+    header_table.add_column(justify="right")
+    header_table.add_row(
         f"[bold cyan]Simple Dev Cleaner[/] [dim]— {t(config, 'app_subtitle')}[/]",
-        f"[dim]By mgdev02[/]  [dim]{date_str}[/]",
+        f"[dim]{date_str}[/]",
     )
-    banner_table.add_row(disk_line, "")
+    disk_panel = Panel(
+        disk_line,
+        box=box.ROUNDED,
+        border_style="dim",
+        padding=(0, 1),
+    )
+    banner_content = Group(header_table, disk_panel)
     console.print(
         Panel(
-            banner_table,
+            banner_content,
             box=box.ROUNDED,
             border_style="cyan",
             padding=(0, 2),
         )
     )
+    console.print(f"[dim]~By mgdev02[/]", justify="right")
     console.print()
 
 
 def main_menu(config: Config) -> str:
     choices = ["0", "1", "2", "3"]
-    console.print(f"[bold]{t(config, 'menu_title')}[/]")
     if sys.stdin.isatty():
         menu_choices = [
             Choice(t(config, "menu_1"), value="1"),   # Dry run & clean
@@ -379,6 +385,7 @@ def main_menu(config: Config) -> str:
                 t(config, "prompt_option"),
                 choices=menu_choices,
                 use_shortcuts=False,
+                instruction=None,
             ).ask()
             return result if result is not None else "0"
         except (KeyboardInterrupt, EOFError):
@@ -453,6 +460,7 @@ def run_dry_run(config: Config) -> None:
                 Choice(t(config, "dry_run_yes_run"), value=True),
             ],
             use_shortcuts=False,
+            instruction=None,
         ).ask()
         run_clean_now = run_choice if run_choice is not None else False
     if run_clean_now:
@@ -467,6 +475,7 @@ def run_dry_run(config: Config) -> None:
                         Choice(t(config, "confirm_yes"), value=True),
                     ],
                     use_shortcuts=False,
+                    instruction=None,
                 ).ask()
                 do_delete = confirm_choice if confirm_choice is not None else False
             else:
@@ -581,6 +590,7 @@ def run_settings(config: Config) -> None:
                     t(config, "config_prompt"),
                     choices=config_menu_choices,
                     use_shortcuts=False,
+                    instruction=None,
                 ).ask()
                 op = op if op is not None else "0"
             except (KeyboardInterrupt, EOFError):
@@ -663,6 +673,7 @@ def run_settings(config: Config) -> None:
                         t(config, "which_remove"),
                         choices=remove_choices,
                         use_shortcuts=False,
+                        instruction=None,
                     ).ask()
                     idx = idx if idx is not None else -1
                 else:
