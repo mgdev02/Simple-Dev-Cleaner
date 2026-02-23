@@ -4,27 +4,33 @@
 
 ---
 
-## Instalación global (recomendada)
+## Instalación
 
-Para tener el comando **`sdevclean`** disponible en cualquier terminal:
+Una sola línea (estilo Homebrew):
 
-### Con pipx (recomendado)
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mgdev02/Simple-Dev-Cleaner/main/install.sh)"
+```
 
-[pipx](https://pypa.github.io/pipx/) instala la herramienta en un entorno aislado y añade el ejecutable al PATH:
+El script usa **pipx** si está instalado, o **pip** en su lugar. Luego ejecutá:
+
+```bash
+sdevclean
+```
+
+---
+
+### Opción manual con pipx
+
+[pipx](https://pypa.github.io/pipx/) instala la herramienta en un entorno aislado:
 
 ```bash
 pipx install git+https://github.com/mgdev02/Simple-Dev-Cleaner.git
 ```
 
-Si no tenés pipx:
+Si no tenés pipx: `brew install pipx` y luego `pipx ensurepath`.
 
-```bash
-brew install pipx
-pipx ensurepath   # añade ~/.local/bin al PATH
-pipx install git+https://github.com/mgdev02/Simple-Dev-Cleaner.git
-```
-
-Al terminar, pipx mostrará algo como:
+Al terminar verás algo como:
 
 ```
 These apps are now globally available
