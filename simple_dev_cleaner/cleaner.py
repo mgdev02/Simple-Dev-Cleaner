@@ -1,4 +1,4 @@
-"""Motor de limpieza de dependencias de desarrollo."""
+"""Development dependency cleanup engine."""
 
 import os
 import shutil
@@ -34,13 +34,13 @@ DEFAULT_TARGET_FILES = [".DS_Store", "*.log", "Thumbs.db"]
 
 
 def _load_toml(path: Path) -> dict:
-    """Carga un archivo TOML. Usa tomllib (3.11+) o tomli."""
+    """Load a TOML file. Uses tomllib (3.11+) or tomli."""
     with open(path, "rb") as f:
         return tomllib.load(f)
 
 
 def _sanitize_for_toml(obj):  # noqa: ANN001
-    """Quita valores None (TOML no los soporta) de dicts/listas de forma recursiva."""
+    """Remove None values (TOML does not support them) from dicts/lists recursively."""
     if obj is None:
         return None
     if isinstance(obj, dict):
@@ -51,7 +51,7 @@ def _sanitize_for_toml(obj):  # noqa: ANN001
 
 
 def _save_toml(path: Path, data: dict) -> None:
-    """Guarda un dict como TOML (sin valores None)."""
+    """Save a dict as TOML (without None values)."""
     path.write_text(tomli_w.dumps(_sanitize_for_toml(data)), encoding="utf-8")
 
 
@@ -78,7 +78,7 @@ class Config:
                 return cls(**{k: v for k, v in cfg.items() if k in cls.__dataclass_fields__})
             except Exception:
                 pass
-        # Migración desde config.json (versiones anteriores)
+        # Migration from config.json (previous versions)
         legacy_path = CONFIG_PATH.with_suffix(".json")
         if legacy_path.exists():
             try:
@@ -244,8 +244,8 @@ def scan(config: Config, dry_run: bool = True, progress_cb=None) -> RunSummary:
                         shutil.rmtree(found)
                         marker = found.parent / "install_packages_again"
                         marker.write_text(
-                            f"Carpeta '{found.name}' eliminada por Simple Dev Cleaner "
-                            f"(sin uso por {hours}h). Reinstalar dependencias.\n"
+                            f"Folder '{found.name}' removed by Simple Dev Cleaner "
+                            f"(unused for {hours}h). Reinstall dependencies.\n"
                         )
                         result.deleted = True
                         total_freed += size
@@ -256,7 +256,7 @@ def scan(config: Config, dry_run: bool = True, progress_cb=None) -> RunSummary:
                 if progress_cb:
                     progress_cb(result)
 
-    # Archivos (target_files: .DS_Store, *.log, etc.)
+    # Files (target_files: .DS_Store, *.log, etc.)
     for scan_dir in config.scan_dirs:
         scan_path = Path(scan_dir).expanduser()
         if not scan_path.is_dir():
@@ -310,18 +310,18 @@ def scan(config: Config, dry_run: bool = True, progress_cb=None) -> RunSummary:
 def _write_log(summary: RunSummary) -> None:
     mode = "DRY-RUN" if summary.dry_run else "CLEAN"
     lines = [
-        f"[{summary.timestamp}] {mode} — {len(summary.results)} encontrados, {summary.total_freed_mb}MB liberados"
+        f"[{summary.timestamp}] {mode} — {len(summary.results)} found, {summary.total_freed_mb}MB freed"
     ]
     for r in summary.results:
-        status = "BORRADO" if r["deleted"] else ("ERROR" if r.get("error") else "SIMULADO")
-        lines.append(f"  [{status}] {r['path']} ({r['size_mb']}MB, {r['unused_hours']}h sin uso)")
+        status = "DELETED" if r["deleted"] else ("ERROR" if r.get("error") else "SIMULATED")
+        lines.append(f"  [{status}] {r['path']} ({r['size_mb']}MB, {r['unused_hours']}h unused)")
     lines.append("")
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 
 def delete_from_summary(summary: RunSummary, progress_cb=None) -> float:
-    """Elimina las carpetas y archivos listados en un summary. Retorna MB liberados."""
+    """Delete folders and files listed in a summary. Return MB freed."""
     total_freed = 0.0
     results = summary.results
     for i, r in enumerate(results):
@@ -339,8 +339,8 @@ def delete_from_summary(summary: RunSummary, progress_cb=None) -> float:
                 shutil.rmtree(path)
                 marker = path.parent / "install_packages_again"
                 marker.write_text(
-                    f"Carpeta '{path.name}' eliminada por Simple Dev Cleaner "
-                    f"(sin uso por {r.get('unused_hours', 0)}h). Reinstalar dependencias.\n"
+                    f"Folder '{path.name}' removed by Simple Dev Cleaner "
+                    f"(unused for {r.get('unused_hours', 0)}h). Reinstall dependencies.\n"
                 )
             total_freed += size_mb
             if progress_cb:

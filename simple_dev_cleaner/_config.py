@@ -1,13 +1,13 @@
-"""Rutas y directorio de configuración (XDG-style)."""
+"""Paths and config directory (XDG-style)."""
 
 from pathlib import Path
 
 
 def get_config_dir() -> Path:
     """
-    Directorio de datos del usuario.
-    Instalado (site-packages): ~/.config/simple-dev-cleaner
-    Desde fuente: directorio del paquete (para desarrollo).
+    User data directory.
+    Installed (site-packages): ~/.config/simple-dev-cleaner
+    From source: package directory (for development).
     """
     pkg_dir = Path(__file__).resolve().parent
     if "site-packages" in str(pkg_dir) or "dist-packages" in str(pkg_dir):

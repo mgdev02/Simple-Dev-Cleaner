@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple Dev Cleaner — Menú manual, colores, loadings, idioma persistente (es/en).
+Simple Dev Cleaner — Interactive menu, colors, loadings, persistent language (es/en).
 """
 
 import os
@@ -35,13 +35,12 @@ from simple_dev_cleaner.system_info import get_system_info
 
 console = Console()
 
-# Traducciones (es/en). Idioma persistido en config.toml.
+# Translations (es/en). Language persisted in config.toml.
 TEXTS = {
     "es": {
         "app_subtitle": "Limpiador de dependencias",
         "menu_title": "Menú principal",
-        "menu_1": "Dry run (ver qué se borraría, sin borrar nada)",
-        "menu_2": "Limpiar (eliminar carpetas sin uso)",
+        "menu_1": "Dry run y limpiar (ver qué se borraría y luego elegir si eliminar)",
         "menu_3": "Ver información del sistema",
         "menu_4": "Ver historial de limpiezas",
         "menu_5": "Configuración (carpetas, umbral, idioma)",
@@ -51,14 +50,14 @@ TEXTS = {
         "first_run_tip": "[dim]Usá ↑↓ y Enter para elegir. Ctrl+C para salir.[/]",
         "bye": "Chau.",
         "press_enter": "[dim]Enter para continuar[/]",
-        "dry_run_title": "Dry run",
-        "dry_run_desc": "Solo voy a buscar. No se borra nada.",
+        "dry_run_title": "Dry run y limpiar",
+        "dry_run_desc": "Primero se muestra qué se borraría; después podés elegir si ejecutar la limpieza real.",
         "scanning": "Buscando carpetas...",
         "found_count": "Encontrados",
         "done": "Listo.",
         "total_found": "Total encontrados",
         "none_match": "No hay carpetas que cumplan el criterio (sin uso hace al menos {} horas).",
-        "table_would_delete": "Carpetas que se borrarían si elegís «Limpiar»",
+        "table_would_delete": "Carpetas/archivos que se borrarían al confirmar",
         "col_path": "Ruta",
         "col_type": "Tipo",
         "col_size": "Tamaño",
@@ -148,12 +147,14 @@ TEXTS = {
         "lang_prompt": "1 o 2",
         "lang_saved_es": "Idioma guardado: Español. Se aplica desde ya.",
         "lang_saved_en": "Language saved: English. It applies from now on.",
+        "interrupted": "Interrumpido. Volvé a elegir una opción.",
+        "error_unexpected": "Error inesperado",
+        "error_hint": "Si se repite, revisá ~/.config/simple-dev-cleaner/config.toml o borrá history.toml y probá de nuevo.",
     },
     "en": {
         "app_subtitle": "Dependency cleaner",
         "menu_title": "Main menu",
-        "menu_1": "Dry run (see what would be deleted, without deleting)",
-        "menu_2": "Clean (delete unused folders)",
+        "menu_1": "Dry run & clean (see what would be deleted, then choose to delete)",
         "menu_3": "System information",
         "menu_4": "Cleanup history",
         "menu_5": "Settings (folders, threshold, language)",
@@ -163,8 +164,8 @@ TEXTS = {
         "first_run_tip": "[dim]Use ↑↓ and Enter to choose. Ctrl+C to exit.[/]",
         "bye": "Bye.",
         "press_enter": "[dim]Press Enter to continue[/]",
-        "dry_run_title": "Dry run",
-        "dry_run_desc": "I'll only search. Nothing will be deleted.",
+        "dry_run_title": "Dry run & clean",
+        "dry_run_desc": "First we show what would be deleted; then you can choose to run the real clean.",
         "scanning": "Scanning folders...",
         "found_count": "Found",
         "done": "Done.",
@@ -260,12 +261,15 @@ TEXTS = {
         "lang_prompt": "1 or 2",
         "lang_saved_es": "Language saved: Spanish. It applies from now on.",
         "lang_saved_en": "Language saved: English. It applies from now on.",
+        "interrupted": "Interrupted. Choose an option again.",
+        "error_unexpected": "Unexpected error",
+        "error_hint": "If it happens again, check ~/.config/simple-dev-cleaner/config.toml or delete history.toml and try again.",
     },
 }
 
 
 def t(config: Config, key: str, *args: Any) -> str:
-    """Traduce una clave al idioma actual."""
+    """Return the translation for the given key in the current language."""
     lang = getattr(config, "lang", "es") or "es"
     if lang not in TEXTS:
         lang = "es"
@@ -276,7 +280,7 @@ def t(config: Config, key: str, *args: Any) -> str:
 
 
 def wait_enter(config: Config) -> None:
-    """Pausa hasta que el usuario pulse Enter (para leer resultados)."""
+    """Pause until the user presses Enter (to read results)."""
     console.print()
     try:
         Prompt.ask(t(config, "press_enter"), default="", show_default=False)
@@ -285,7 +289,7 @@ def wait_enter(config: Config) -> None:
 
 
 def _normalize_choice(raw: str, choices: list[str]) -> str:
-    """Acepta 0/q como salir/volver. Devuelve opción válida o '0'."""
+    """Accept 0/q as exit/back. Return valid choice or '0'."""
     s = (raw or "").strip().lower()
     if s in ("q", "quit", "exit", "esc"):
         return "0"
@@ -293,14 +297,14 @@ def _normalize_choice(raw: str, choices: list[str]) -> str:
 
 
 def format_size_mb(mb: float) -> str:
-    """Formatea MB a 'X.X GB' si >= 1024, sino 'X.X MB'."""
+    """Format MB as 'X.X GB' if >= 1024, else 'X.X MB'."""
     if mb >= 1024:
         return f"{mb / 1024:.1f} GB"
     return f"{mb:.1f} MB"
 
 
 def format_unused_hours(hours: int) -> str:
-    """Formatea horas a 'X h', '1 day', '2 days', '1 week', etc."""
+    """Format hours as 'X h', '1 day', '2 days', '1 week', etc."""
     if hours < 24:
         return f"{hours} h"
     if hours < 168:  # < 1 week
@@ -315,7 +319,7 @@ def format_unused_hours(hours: int) -> str:
 
 def print_banner(config: Config) -> None:
     console.print()
-    fecha = datetime.now().strftime("%H:%M %d/%m/%Y")
+    date_str = datetime.now().strftime("%H:%M %d/%m/%Y")
     with console.status(f"[dim]{t(config, 'system_loading')}[/]", spinner="dots"):
         info = get_system_info()
     pct = info["disk_pct"]
@@ -332,7 +336,7 @@ def print_banner(config: Config) -> None:
     banner_table.add_column(justify="right")
     banner_table.add_row(
         f"[bold cyan]Simple Dev Cleaner[/] [dim]— {t(config, 'app_subtitle')}[/]",
-        f"[dim]{fecha}[/]",
+        f"[dim]{date_str}[/]",
     )
     banner_table.add_row(disk_line, "")
     console.print(
@@ -346,15 +350,14 @@ def print_banner(config: Config) -> None:
     console.print()
 
 
-def menu_principal(config: Config) -> str:
-    choices = ["0", "1", "2", "3", "4"]
+def main_menu(config: Config) -> str:
+    choices = ["0", "1", "2", "3"]
     console.print(f"[bold]{t(config, 'menu_title')}[/]")
     if sys.stdin.isatty():
         menu_choices = [
-            Choice(t(config, "menu_1"), value="1"),
-            Choice(t(config, "menu_2"), value="2"),
-            Choice(t(config, "menu_4"), value="3"),  # Historial
-            Choice(t(config, "menu_5"), value="4"),  # Configuración
+            Choice(t(config, "menu_1"), value="1"),   # Dry run & clean
+            Choice(t(config, "menu_4"), value="2"),   # History
+            Choice(t(config, "menu_5"), value="3"),   # Settings
             Choice(t(config, "menu_0"), value="0"),
         ]
         try:
@@ -366,7 +369,7 @@ def menu_principal(config: Config) -> str:
             return result if result is not None else "0"
         except (KeyboardInterrupt, EOFError):
             return "0"
-    # Sin TTY (script/pipe): fallback a entrada por número
+    # No TTY (script/pipe): fallback to number input
     try:
         raw = (Prompt.ask(f"[bold]{t(config, 'prompt_option')}[/]", default="0") or "0").strip()
         return _normalize_choice(raw, choices)
@@ -504,111 +507,16 @@ def run_dry_run(config: Config) -> None:
             console.print(f"[dim]{t(config, 'cancelled')}[/]")
 
 
-def run_limpiar(config: Config) -> None:
-    console.print()
-    console.print(f"[bold red]{t(config, 'clean_title')}[/] — {t(config, 'clean_desc')}")
-    console.print()
-    count: list[int] = [0]
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}[/]"),
-        TextColumn("[dim]" + t(config, "found_count") + ": {task.fields[count]}[/]"),
-        console=console,
-    ) as progress:
-        task = progress.add_task(t(config, "scanning"), count=0)
-
-        def on_found(r: Any) -> None:
-            count[0] += 1
-            progress.update(task_id=task, fields={"count": count[0]})
-
-        summary = scan(config, dry_run=True, progress_cb=on_found)
-
-    total = len(summary.results)
-    if total == 0:
-        console.print(f"[green]{t(config, 'nothing_to_clean')}[/]")
-        return
-    console.print(f"[green]{t(config, 'found_folders')}: [bold]{total}[/] {t(config, 'folders')}[/]")
-    total_mb = sum(r["size_mb"] for r in summary.results)
-    console.print(f"{t(config, 'space_to_free')}: [bold]{format_size_mb(total_mb)}[/]")
-    console.print()
-    console.print(f"[bold yellow]{t(config, 'warning_irreversible')}[/]")
-    console.print()
-    try:
-        if sys.stdin.isatty():
-            confirm_choice = select(
-                t(config, "confirm_delete"),
-                choices=[
-                    Choice(t(config, "confirm_no"), value=False),
-                    Choice(t(config, "confirm_yes"), value=True),
-                ],
-                use_shortcuts=False,
-            ).ask()
-            do_delete = confirm_choice if confirm_choice is not None else False
-        else:
-            do_delete = Confirm.ask(
-                f"[yellow]{t(config, 'confirm_delete')}[/]\n{t(config, 'confirm_yes_no')}",
-                default=False,
-            )
-        if not do_delete:
-            console.print(f"[dim]{t(config, 'cancelled')}[/]")
-            return
-    except Exception:
-        console.print(f"[dim]{t(config, 'cancelled')}[/]")
-        return
-    console.print()
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold green]{task.description}[/]"),
-        BarColumn(bar_width=40, complete_style="green", finished_style="green"),
-        TaskProgressColumn(),
-        TextColumn("[dim]{task.fields[status]}[/]"),
-        console=console,
-    ) as progress:
-        task = progress.add_task(t(config, "deleting"), total=total, status="", completed=0)
-
-        def on_delete(current: int, total_n: int, r: dict, err: str | None) -> None:
-            pct = (current / total_n) * 100 if total_n else 0
-            status = r["path"].replace(str(Path.home()), "~")
-            if len(status) > 50:
-                status = "..." + status[-47:]
-            if err:
-                status = f"[red]{t(config, 'error_deleting')}: {status}[/]"
-            progress.update(task_id=task, completed=current, percent=pct, status=status)
-
-        freed = delete_from_summary(summary, progress_cb=on_delete)
-        progress.update(task_id=task, completed=total, percent=100, status="[green]✓[/]")
-
-    summary.dry_run = False
-    summary.total_freed_mb = freed
-    summary.results = [{**r, "deleted": True} for r in summary.results]
-    summary.save()
-    console.print()
-    expected_mb = sum(r["size_mb"] for r in summary.results)
-    body = f"[bold green]{t(config, 'done')}[/]\n\n{t(config, 'space_freed')}: [bold]{format_size_mb(freed)}[/]\n{t(config, 'folders_deleted')}: [bold]{total}[/]"
-    if freed < expected_mb - 0.1:
-        body += f"\n[dim]{t(config, 'freed_less_note', format_size_mb(expected_mb - freed))}[/]"
-    console.print(
-        Panel(
-            body,
-            title=t(config, "result_title"),
-            border_style="green",
-            box=box.ROUNDED,
-        )
-    )
-    console.print(f"[dim]{t(config, 'marker_note')}[/]")
-    wait_enter(config)
-
-
-def run_historial(config: Config) -> None:
+def run_history(config: Config) -> None:
     console.print()
     runs = RunSummary.load_all()
     if not runs:
         console.print(f"[dim]{t(config, 'history_empty')}[/]")
         return
-    total_liberado = sum(r["total_freed_mb"] for r in runs)
-    total_ejecuciones = len(runs)
+    total_freed_mb = sum(r["total_freed_mb"] for r in runs)
+    run_count = len(runs)
     table = Table(
-        title=f"{t(config, 'history_title')} — {t(config, 'history_total_freed')}: {format_size_mb(total_liberado)} ({total_ejecuciones} {t(config, 'history_runs')})",
+        title=f"{t(config, 'history_title')} — {t(config, 'history_total_freed')}: {format_size_mb(total_freed_mb)} ({run_count} {t(config, 'history_runs')})",
         box=box.ROUNDED,
         header_style="bold cyan",
     )
@@ -617,13 +525,13 @@ def run_historial(config: Config) -> None:
     table.add_column(t(config, "col_items"), justify="right", width=8)
     table.add_column(t(config, "col_freed"), justify="right", width=12)
     for r in runs[:25]:
-        tipo = f"[dim]{t(config, 'type_dry')}[/]" if r["dry_run"] else f"[green]{t(config, 'type_clean')}[/]"
-        table.add_row(r["timestamp"], tipo, str(len(r["results"])), format_size_mb(r["total_freed_mb"]))
+        run_type_label = f"[dim]{t(config, 'type_dry')}[/]" if r["dry_run"] else f"[green]{t(config, 'type_clean')}[/]"
+        table.add_row(r["timestamp"], run_type_label, str(len(r["results"])), format_size_mb(r["total_freed_mb"]))
     console.print(table)
 
 
 def _open_config_in_editor(config: Config) -> bool:
-    """Abre config.toml con $EDITOR o nano. Devuelve True si se abrió."""
+    """Open config.toml with $EDITOR or nano. Return True if opened."""
     from simple_dev_cleaner._config import CONFIG_FILE
     editor = os.environ.get("EDITOR", "nano").strip()
     path = str(CONFIG_FILE)
@@ -638,9 +546,9 @@ def _open_config_in_editor(config: Config) -> bool:
         return False
 
 
-def run_configurar(config: Config) -> None:
+def run_settings(config: Config) -> None:
     n = len(config.scan_dirs)
-    lang_label = "Español" if config.lang == "es" else "English"
+    lang_label = "Spanish" if config.lang == "es" else "English"
     config_choices = ["0", "1", "2", "3", "4", "5", "6"]
     while True:
         console.print(f"\n[bold]{t(config, 'config_title')}[/]")
@@ -687,14 +595,14 @@ def run_configurar(config: Config) -> None:
                     console.print(f"  [cyan]{i}.[/] {short}  {exists}")
             console.print()
         elif op == "2":
-            ruta = (Prompt.ask(t(config, "path_prompt")) or "").strip()
-            if not ruta:
+            path_input = (Prompt.ask(t(config, "path_prompt")) or "").strip()
+            if not path_input:
                 console.print(f"[yellow]{t(config, 'path_empty')}[/]")
                 continue
-            if ruta.lower() == "q":
+            if path_input.lower() == "q":
                 continue
-            # Varias rutas separadas por coma (o por línea si pegan varias)
-            parts = [p.strip() for p in ruta.replace("\n", ",").split(",") if p.strip()]
+            # Multiple paths separated by comma (or newline if pasting several)
+            parts = [p.strip() for p in path_input.replace("\n", ",").split(",") if p.strip()]
             added = 0
             skipped = 0
             for part in parts:
@@ -798,7 +706,7 @@ def run_configurar(config: Config) -> None:
                 config.lang = "es"
                 config.save()
                 console.print(f"[green]{t(config, 'lang_saved_es')}[/]")
-            lang_label = "English" if config.lang == "en" else "Español"
+            lang_label = "English" if config.lang == "en" else "Spanish"
         elif op == "6":
             console.print()
             console.print(f"[dim]{t(config, 'edit_config')}[/]")
@@ -826,27 +734,23 @@ def main() -> None:
         console.print()
 
     while True:
-        opcion = menu_principal(config)
-        if opcion == "0":
+        option = main_menu(config)
+        if option == "0":
             console.print(f"[dim]{t(config, 'bye')}[/]")
             break
         try:
-            if opcion == "1":
+            if option == "1":
                 run_dry_run(config)
-            elif opcion == "2":
-                run_limpiar(config)
-            elif opcion == "3":
-                run_historial(config)
-            elif opcion == "4":
-                run_configurar(config)
+            elif option == "2":
+                run_history(config)
+            elif option == "3":
+                run_settings(config)
                 config = Config.load()
         except KeyboardInterrupt:
-            console.print("\n[dim]Interrumpido. Volvé a elegir una opción.[/]")
+            console.print(f"\n[dim]{t(config, 'interrupted')}[/]")
         except Exception as e:
-            console.print(f"[red]Error inesperado: {e}[/]")
-            console.print(
-                "[dim]Si se repite, revisá ~/.config/simple-dev-cleaner/config.toml o borrá history.toml y probá de nuevo.[/]"
-            )
+            console.print(f"[red]{t(config, 'error_unexpected')}: {e}[/]")
+            console.print(f"[dim]{t(config, 'error_hint')}[/]")
 
 
 if __name__ == "__main__":

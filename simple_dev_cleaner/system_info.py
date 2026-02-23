@@ -1,4 +1,4 @@
-"""Recolecta información del sistema macOS."""
+"""Collect macOS system information."""
 
 import platform
 import shutil
@@ -23,7 +23,7 @@ def get_system_info() -> dict:
     if chip == "N/A" or "Apple" not in chip:
         chip = _run("system_profiler SPHardwareDataType | awk '/Chip:/{$1=\"\"; print $0}'").strip()
         if not chip or chip == "N/A":
-            chip = platform.processor() or "Desconocido"
+            chip = platform.processor() or "Unknown"
 
     ram_bytes = _run("sysctl -n hw.memsize")
     try:
