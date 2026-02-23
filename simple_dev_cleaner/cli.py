@@ -76,6 +76,7 @@ TEXTS = {
         "found_folders": "Encontradas",
         "folders": "carpetas.",
         "space_to_free": "Espacio a liberar",
+        "warning_irreversible": "⚠ ADVERTENCIA: Una vez borrado no se puede recuperar.",
         "confirm_delete": "¿Estás seguro? Se eliminarán las carpetas (es irreversible)",
         "confirm_yes_no": "Escribí [bold]sí[/] o [bold]no[/]",
         "confirm_yes": "Sí, eliminar",
@@ -187,6 +188,7 @@ TEXTS = {
         "found_folders": "Found",
         "folders": "folders.",
         "space_to_free": "Space to free",
+        "warning_irreversible": "⚠ WARNING: Once deleted, it cannot be recovered.",
         "confirm_delete": "Are you sure? These folders will be deleted (cannot be undone)",
         "confirm_yes_no": "Type [bold]yes[/] or [bold]no[/]",
         "confirm_yes": "Yes, delete",
@@ -438,6 +440,8 @@ def run_dry_run(config: Config) -> None:
         run_clean_now = run_choice if run_choice is not None else False
     if run_clean_now:
         try:
+            console.print(f"[bold yellow]{t(config, 'warning_irreversible')}[/]")
+            console.print()
             if sys.stdin.isatty():
                 confirm_choice = select(
                     t(config, "confirm_delete"),
@@ -526,6 +530,8 @@ def run_limpiar(config: Config) -> None:
     console.print(f"[green]{t(config, 'found_folders')}: [bold]{total}[/] {t(config, 'folders')}[/]")
     total_mb = sum(r["size_mb"] for r in summary.results)
     console.print(f"{t(config, 'space_to_free')}: [bold]{format_size_mb(total_mb)}[/]")
+    console.print()
+    console.print(f"[bold yellow]{t(config, 'warning_irreversible')}[/]")
     console.print()
     try:
         if sys.stdin.isatty():
