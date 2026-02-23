@@ -151,7 +151,10 @@ TEXTS = {
         "interrupted": "Interrumpido. Volvé a elegir una opción.",
         "error_unexpected": "Error inesperado",
         "error_hint": "Si se repite, revisá ~/.config/simple-dev-cleaner/config.toml o borrá history.toml y probá de nuevo.",
-        "check_updates": "Comprobando actualizaciones",
+        "check_updates": "Check updates",
+        "downloading": "Downloading…",
+        "updated": "Updated.",
+        "updated_next_run": "[dim]La próxima vez que ejecutes sdevclean tendrás la versión nueva.[/]",
         "update_fail": "No se pudo actualizar. Actualizá manualmente: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
     "en": {
@@ -268,6 +271,9 @@ TEXTS = {
         "error_unexpected": "Unexpected error",
         "error_hint": "If it happens again, check ~/.config/simple-dev-cleaner/config.toml or delete history.toml and try again.",
         "check_updates": "Check updates",
+        "downloading": "Downloading…",
+        "updated": "Updated.",
+        "updated_next_run": "[dim]Next time you run sdevclean you'll have the new version.[/]",
         "update_fail": "Could not update. Update manually: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
 }
@@ -708,12 +714,20 @@ def run_settings(config: Config) -> None:
         elif op == "5":
             console.print()
             console.print(f"[dim]{t(config, 'lang_current')}: {lang_label}[/]")
-            console.print(t(config, "lang_choose"))
             try:
-                choice = (
-                    Prompt.ask(t(config, "lang_prompt"), choices=["1", "2"], default="1")
-                    or "1"
-                ).strip()
+                if sys.stdin.isatty():
+                    choice = select(
+                        t(config, "lang_choose"),
+                        choices=[
+                            Choice("Español", value="1"),
+                            Choice("English", value="2"),
+                        ],
+                        use_shortcuts=False,
+                        instruction="",
+                    ).ask()
+                    choice = choice if choice is not None else "1"
+                else:
+                    choice = (Prompt.ask(t(config, "lang_prompt"), default="1") or "1").strip()
             except Exception:
                 choice = "1"
             if choice == "2":
@@ -752,10 +766,14 @@ def main() -> None:
         console.print(t(config, "first_run_tip"))
         console.print()
 
-    # Check updates (with spinner). New version applies next time you run sdevclean.
+    # Check updates: Check → Downloading → Updated
     try:
-        with console.status(f"[dim]{t(config, 'check_updates')}[/]", spinner="dots"):
-            run_update()
+        with console.status(f"[dim]{t(config, 'check_updates')}[/]", spinner="dots") as status:
+            status.update(status=f"[dim]{t(config, 'downloading')}[/]")
+            updated = run_update()
+        if updated:
+            console.print(f"[green]{t(config, 'updated')}[/]")
+            console.print(t(config, "updated_next_run"))
     except Exception:
         pass
 

@@ -7,6 +7,7 @@ import sys
 
 GITHUB_REPO = "mgdev02/Simple-Dev-Cleaner"
 INSTALL_URL = f"git+https://github.com/{GITHUB_REPO}.git"
+INSTALL_SCRIPT_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/install.sh"
 
 
 def _find_pipx() -> str | None:
@@ -25,10 +26,36 @@ def _find_pipx() -> str | None:
     return None
 
 
+def _env_with_full_path() -> dict[str, str]:
+    """Build env with PATH that includes common locations so pipx/git work."""
+    home = os.path.expanduser("~")
+    extra = [
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        os.path.join(home, ".local", "bin"),
+        "/usr/bin",
+        "/bin",
+    ]
+    current = os.environ.get("PATH", "")
+    seen = set()
+    parts = []
+    for p in extra:
+        if p not in seen:
+            seen.add(p)
+            parts.append(p)
+    for p in current.split(os.pathsep):
+        if p and p not in seen:
+            seen.add(p)
+            parts.append(p)
+    return {**os.environ, "PATH": os.pathsep.join(parts)}
+
+
 def run_update() -> bool:
     """
-    Run upgrade: pipx upgrade --force (or pip). Return True on success.
+    Run upgrade: pipx upgrade --force, or install script with --force, or pip.
+    Return True on success.
     """
+    env = _env_with_full_path()
     pipx_path = _find_pipx()
     if pipx_path:
         try:
@@ -37,12 +64,29 @@ def run_update() -> bool:
                 capture_output=True,
                 text=True,
                 timeout=120,
-                env={**os.environ, "PATH": os.environ.get("PATH", "")},
+                env=env,
             )
             if r.returncode == 0:
                 return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
+    # Fallback: run install script with --force (same as user would run)
+    try:
+        r = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f'curl -fsSL "{INSTALL_SCRIPT_URL}" | bash -s -- --force',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+        if r.returncode == 0:
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
     try:
         r = subprocess.run(
             [
@@ -59,6 +103,7 @@ def run_update() -> bool:
             capture_output=True,
             text=True,
             timeout=120,
+            env=env,
         )
         return r.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
