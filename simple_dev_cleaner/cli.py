@@ -48,6 +48,7 @@ TEXTS = {
         "menu_0": "Salir (Ctrl+C)",
         "prompt_option": "Elegí una opción (↑ ↓ flechas, Enter)",
         "hint_exit": "[dim](0 o q = salir)[/]",
+        "first_run_tip": "[dim]Usá ↑↓ y Enter para elegir. Ctrl+C para salir.[/]",
         "bye": "Chau.",
         "press_enter": "[dim]Enter para continuar[/]",
         "dry_run_title": "Dry run",
@@ -158,6 +159,7 @@ TEXTS = {
         "menu_0": "Exit (Ctrl+C)",
         "prompt_option": "Choose an option (↑ ↓ arrows, Enter)",
         "hint_exit": "[dim](0 or q = exit)[/]",
+        "first_run_tip": "[dim]Use ↑↓ and Enter to choose. Ctrl+C to exit.[/]",
         "bye": "Bye.",
         "press_enter": "[dim]Press Enter to continue[/]",
         "dry_run_title": "Dry run",
@@ -805,12 +807,17 @@ def run_configurar(config: Config) -> None:
 
 
 def main() -> None:
+    from simple_dev_cleaner._config import HISTORY_FILE
+
     config = Config.load()
     if not getattr(config, "lang", "").strip():
         config.lang = "es"
         config.save()
 
     print_banner(config)
+    if not HISTORY_FILE.exists():
+        console.print(t(config, "first_run_tip"))
+        console.print()
 
     while True:
         opcion = menu_principal(config)

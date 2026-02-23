@@ -24,7 +24,15 @@ pipx ensurepath   # añade ~/.local/bin al PATH
 pipx install git+https://github.com/mgdev02/Simple-Dev-Cleaner.git
 ```
 
-Luego, en cualquier carpeta:
+Al terminar, pipx mostrará algo como:
+
+```
+These apps are now globally available
+  - sdevclean
+done! ✨ 🌟 ✨
+```
+
+Ejecutá en cualquier carpeta:
 
 ```bash
 sdevclean
