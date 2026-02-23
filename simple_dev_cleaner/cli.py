@@ -5,7 +5,6 @@ Simple Dev Cleaner — Interactive menu, colors, loadings, persistent language (
 
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -753,14 +752,10 @@ def main() -> None:
         console.print(t(config, "first_run_tip"))
         console.print()
 
-    # Check updates (with spinner); if updated, restart this process with new code
+    # Check updates (with spinner). New version applies next time you run sdevclean.
     try:
         with console.status(f"[dim]{t(config, 'check_updates')}[/]", spinner="dots"):
-            updated = run_update()
-        if updated:
-            new_exe = shutil.which("sdevclean")
-            if new_exe:
-                os.execv(new_exe, [new_exe])
+            run_update()
     except Exception:
         pass
 
