@@ -12,6 +12,12 @@ Una sola línea:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mgdev02/Simple-Dev-Cleaner/main/install.sh)"
 ```
 
+Para reinstalar o forzar actualización (misma línea con `--force`):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mgdev02/Simple-Dev-Cleaner/main/install.sh)" -- --force
+```
+
 Luego ejecutá:
 
 ```bash

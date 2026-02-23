@@ -1,5 +1,6 @@
 """Run pip/pipx upgrade from GitHub (main branch)."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -8,26 +9,40 @@ GITHUB_REPO = "mgdev02/Simple-Dev-Cleaner"
 INSTALL_URL = f"git+https://github.com/{GITHUB_REPO}.git"
 
 
+def _find_pipx() -> str | None:
+    """Find pipx binary (we may run inside pipx venv where PATH is limited)."""
+    exe = shutil.which("pipx")
+    if exe:
+        return exe
+    home = os.path.expanduser("~")
+    for path in (
+        os.path.join(home, ".local", "bin", "pipx"),
+        "/opt/homebrew/bin/pipx",
+        "/usr/local/bin/pipx",
+    ):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
 def run_update() -> bool:
     """
-    Run upgrade: try pipx from PATH first, then pip.
-    Return True if upgrade was run successfully.
+    Run upgrade: pipx upgrade --force (or pip). Return True on success.
     """
-    # Prefer pipx (must use binary from PATH when we run inside pipx venv)
-    pipx_path = shutil.which("pipx")
+    pipx_path = _find_pipx()
     if pipx_path:
         try:
             r = subprocess.run(
-                [pipx_path, "upgrade", "simple-dev-cleaner"],
+                [pipx_path, "upgrade", "--force", "simple-dev-cleaner"],
                 capture_output=True,
                 text=True,
                 timeout=120,
+                env={**os.environ, "PATH": os.environ.get("PATH", "")},
             )
             if r.returncode == 0:
                 return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
-    # Fallback: pip install --user --upgrade
     try:
         r = subprocess.run(
             [
@@ -37,6 +52,8 @@ def run_update() -> bool:
                 "install",
                 "--user",
                 "--upgrade",
+                "--force-reinstall",
+                "--no-cache-dir",
                 INSTALL_URL,
             ],
             capture_output=True,
@@ -53,11 +70,11 @@ def run_update_background() -> None:
     """
     Start upgrade in background (pipx or pip). Does not block.
     """
-    pipx_path = shutil.which("pipx")
+    pipx_path = _find_pipx()
     if pipx_path:
         try:
             subprocess.Popen(
-                [pipx_path, "upgrade", "simple-dev-cleaner"],
+                [pipx_path, "upgrade", "--force", "simple-dev-cleaner"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
