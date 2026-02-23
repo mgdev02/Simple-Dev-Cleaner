@@ -32,7 +32,7 @@ from simple_dev_cleaner.cleaner import (
     delete_from_summary,
 )
 from simple_dev_cleaner.system_info import get_system_info
-from simple_dev_cleaner.update_check import run_update_background
+from simple_dev_cleaner.update_check import run_update
 
 console = Console()
 
@@ -151,7 +151,7 @@ TEXTS = {
         "interrupted": "Interrumpido. Volvé a elegir una opción.",
         "error_unexpected": "Error inesperado",
         "error_hint": "Si se repite, revisá ~/.config/simple-dev-cleaner/config.toml o borrá history.toml y probá de nuevo.",
-        "update_background": "Actualizando en segundo plano. La próxima vez que ejecutes sdevclean tendrás la última versión.",
+        "check_updates": "Comprobando actualizaciones",
         "update_fail": "No se pudo actualizar. Actualizá manualmente: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
     "en": {
@@ -267,7 +267,7 @@ TEXTS = {
         "interrupted": "Interrupted. Choose an option again.",
         "error_unexpected": "Unexpected error",
         "error_hint": "If it happens again, check ~/.config/simple-dev-cleaner/config.toml or delete history.toml and try again.",
-        "update_background": "Updating in background. Next time you run sdevclean you'll have the latest version.",
+        "check_updates": "Check updates",
         "update_fail": "Could not update. Update manually: [dim]pipx upgrade simple-dev-cleaner[/]",
     },
 }
@@ -746,16 +746,16 @@ def main() -> None:
 
     print_banner(config)
 
-    # Auto-update in background from GitHub (next run will use new version)
-    try:
-        run_update_background()
-        console.print(f"[dim]{t(config, 'update_background')}[/]")
-    except Exception:
-        pass
-
     if not HISTORY_FILE.exists():
         console.print(t(config, "first_run_tip"))
         console.print()
+
+    # Check updates (with spinner); if there are changes, update
+    try:
+        with console.status(f"[dim]{t(config, 'check_updates')}[/]", spinner="dots"):
+            run_update()
+    except Exception:
+        pass
 
     while True:
         option = main_menu(config)
