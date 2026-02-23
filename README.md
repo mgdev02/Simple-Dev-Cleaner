@@ -48,6 +48,30 @@ export PATH="$HOME/Library/Python/3.12/bin:$PATH"
 
 ---
 
+## Desinstalar
+
+Se desinstala por **nombre del paquete** (`simple-dev-cleaner`), no por la URL de git.
+
+**Si instalaste con pipx:**
+
+```bash
+pipx uninstall simple-dev-cleaner
+```
+
+**Si instalaste con pip:**
+
+```bash
+pip uninstall simple-dev-cleaner
+```
+
+La configuración y el historial en `~/.config/simple-dev-cleaner/` no se borran. Si querés eliminarlos también:
+
+```bash
+rm -rf ~/.config/simple-dev-cleaner
+```
+
+---
+
 ## Configuración (TOML)
 
 La configuración y el historial se guardan en **TOML** (formato estándar en ecosistema Python):

@@ -69,8 +69,10 @@ TEXTS = {
         "found_folders": "Encontradas",
         "folders": "carpetas.",
         "space_to_free": "Espacio a liberar",
-        "confirm_delete": "¿Eliminar estas carpetas? (es irreversible)",
+        "confirm_delete": "¿Estás seguro? Se eliminarán las carpetas (es irreversible)",
         "confirm_yes_no": "Escribí [bold]sí[/] o [bold]no[/]",
+        "confirm_yes": "Sí, eliminar",
+        "confirm_no": "No, cancelar",
         "cancelled": "Cancelado. No se borró nada.",
         "deleting": "Eliminando...",
         "result_title": "Resultado",
@@ -122,7 +124,8 @@ TEXTS = {
         "edit_config": "Abriendo config en el editor…",
         "edit_done": "Config guardada. Cambios aplicados.",
         "edit_fail": "No se pudo abrir el editor (probá EDITOR=nano o editar a mano ~/.config/simple-dev-cleaner/config.toml).",
-        "which_remove": "¿Cuál querés quitar? Escribí el número de la lista",
+        "which_remove": "¿Cuál carpeta querés quitar de la lista? (↑ ↓ flechas, Enter)",
+        "which_remove_cancel": "Cancelar (volver)",
         "hint_q_cancel": "[dim](q = cancelar)[/]",
         "number_invalid": "Ese número no es válido. Elegí un número entre 1 y {}.",
         "removed_from_list": "Quitada de la lista.",
@@ -169,8 +172,10 @@ TEXTS = {
         "found_folders": "Found",
         "folders": "folders.",
         "space_to_free": "Space to free",
-        "confirm_delete": "Delete these folders? (this cannot be undone)",
+        "confirm_delete": "Are you sure? These folders will be deleted (cannot be undone)",
         "confirm_yes_no": "Type [bold]yes[/] or [bold]no[/]",
+        "confirm_yes": "Yes, delete",
+        "confirm_no": "No, cancel",
         "cancelled": "Cancelled. Nothing was deleted.",
         "deleting": "Deleting...",
         "result_title": "Result",
@@ -222,7 +227,8 @@ TEXTS = {
         "edit_config": "Opening config in editor…",
         "edit_done": "Config saved. Changes applied.",
         "edit_fail": "Could not open editor (try EDITOR=nano or edit ~/.config/simple-dev-cleaner/config.toml manually).",
-        "which_remove": "Which one to remove? Enter the number from the list",
+        "which_remove": "Which folder do you want to remove from the list? (↑ ↓ arrows, Enter)",
+        "which_remove_cancel": "Cancel (go back)",
         "hint_q_cancel": "[dim](q = cancel)[/]",
         "number_invalid": "That number isn't valid. Choose a number between 1 and {}.",
         "removed_from_list": "Removed from the list.",
@@ -394,10 +400,22 @@ def run_limpiar(config: Config) -> None:
     console.print(f"{t(config, 'space_to_free')}: [bold]{total_mb:.1f} MB[/]")
     console.print()
     try:
-        if not Confirm.ask(
-            f"[yellow]{t(config, 'confirm_delete')}[/]\n{t(config, 'confirm_yes_no')}",
-            default=False,
-        ):
+        if sys.stdin.isatty():
+            confirm_choice = select(
+                t(config, "confirm_delete"),
+                choices=[
+                    Choice(t(config, "confirm_no"), value=False),
+                    Choice(t(config, "confirm_yes"), value=True),
+                ],
+                use_shortcuts=False,
+            ).ask()
+            do_delete = confirm_choice if confirm_choice is not None else False
+        else:
+            do_delete = Confirm.ask(
+                f"[yellow]{t(config, 'confirm_delete')}[/]\n{t(config, 'confirm_yes_no')}",
+                default=False,
+            )
+        if not do_delete:
             console.print(f"[dim]{t(config, 'cancelled')}[/]")
             return
     except Exception:
@@ -601,26 +619,39 @@ def run_configurar(config: Config) -> None:
             if not config.scan_dirs:
                 console.print(f"[dim]{t(config, 'no_folders_configured')}[/]")
                 continue
-            console.print()
-            for i, d in enumerate(config.scan_dirs, 1):
-                short = d.replace(str(Path.home()), "~")
-                console.print(f"  [cyan]{i}.[/] {short}")
-            console.print()
+            remove_choices = [
+                Choice(
+                    f"{i}. {d.replace(str(Path.home()), '~')}",
+                    value=i - 1,
+                )
+                for i, d in enumerate(config.scan_dirs, 1)
+            ]
+            remove_choices.append(Choice(t(config, "which_remove_cancel"), value=-1))
             try:
-                raw = (Prompt.ask(t(config, "which_remove") + " " + t(config, "hint_q_cancel"), default="0") or "0").strip()
-                if raw.lower() == "q":
-                    continue
-                idx = int(raw)
-            except ValueError:
-                console.print(f"[red]{t(config, 'number_invalid', n)}[/]")
+                if sys.stdin.isatty():
+                    idx = select(
+                        t(config, "which_remove"),
+                        choices=remove_choices,
+                        use_shortcuts=False,
+                    ).ask()
+                    idx = idx if idx is not None else -1
+                else:
+                    console.print()
+                    for i, d in enumerate(config.scan_dirs, 1):
+                        short = d.replace(str(Path.home()), "~")
+                        console.print(f"  [cyan]{i}.[/] {short}")
+                    console.print()
+                    raw = (Prompt.ask(t(config, "which_remove") + " " + t(config, "hint_q_cancel"), default="0") or "0").strip()
+                    if raw.lower() == "q":
+                        continue
+                    idx = int(raw) - 1 if raw.isdigit() else -1
+            except (KeyboardInterrupt, EOFError, ValueError):
                 continue
-            if 1 <= idx <= len(config.scan_dirs):
-                config.scan_dirs.pop(idx - 1)
+            if 0 <= idx < len(config.scan_dirs):
+                config.scan_dirs.pop(idx)
                 config.save()
                 n = len(config.scan_dirs)
                 console.print(f"[green]{t(config, 'removed_from_list')}[/]")
-            else:
-                console.print(f"[red]{t(config, 'number_invalid', n)}[/]")
         elif op == "4":
             try:
                 raw = (
